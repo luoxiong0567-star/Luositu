@@ -9,9 +9,9 @@ const ROOT = 'C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light';
 const PORT = 9451;
 const URL_BASE = 'file:///C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light/web/index.html';
 
-// 13 个场景（registration 顺序）
+// 12 个场景（registration 顺序）
 const SCENES = ['solar', 'periodic', 'neural', 'math', 'interference', 'molecule',
-  'fourier', 'emwave', 'photosynthesis', 'maxwell', 'massenergy', 'spacetime', 'gravity'];
+  'fourier', 'emwave', 'photosynthesis', 'maxwell', 'massenergy', 'gravity'];
 
 function httpReq(url, method) {
   return new Promise((res, rej) => {
@@ -108,11 +108,11 @@ function httpReq(url, method) {
     log('── ' + sc.padEnd(14) + (ok ? 'PASS' : 'FAIL') +
       '  btn=' + v.tourBtn + ' enter=' + v.shown1 + ' 1st="' + (v.title1 || '').slice(0, 18) + '" 2nd="' + (v.title2 || '').slice(0, 18) + '"' +
       ' exit=' + (!v.shownAfterExit) + (r.errors.length ? '  !! ' + r.errors[0] : ''));
-    if (sc === 'maxwell' || sc === 'spacetime' || sc === 'photosynthesis') {
+    if (sc === 'maxwell' || sc === 'photosynthesis') {
       // 重进讲解并截图
       await r.evalx('HL.manager.inst.setParam("tour")');
       await new Promise(rr => setTimeout(rr, 2000));
-      const f = sc === 'maxwell' ? 'tour-maxwell.png' : (sc === 'spacetime' ? 'spacetime-讲解.png' : 'tour-photosynthesis.png');
+      const f = sc === 'maxwell' ? 'tour-maxwell.png' : 'tour-photosynthesis.png';
       await r.shot(f);
     }
     await r.close();
@@ -132,55 +132,14 @@ function httpReq(url, method) {
         foot: g ? (g.querySelector('.gal-foot')||{}).textContent || '' : ''
       });
     })()`) || {};
-    const ok = v.show && v.chapters === 4 && v.cards === 13 && v.imgs >= 12 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
+    const ok = v.show && v.chapters === 4 && v.cards === 12 && v.imgs >= 12 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
     if (!ok) bad++;
     log('── 目录页四章       ' + (ok ? 'PASS' : 'FAIL') + '  chapters=' + v.chapters + ' cards=' + v.cards + ' imgs=' + v.imgs +
       ' [' + (v.chNames || []).join(' | ') + ']' + (r.errors.length ? ' !! ' + r.errors[0] : ''));
     await r.close();
   }
 
-  /* ---------- C. 时空弯曲物理读数 ---------- */
-  {
-    const r = await open(URL_BASE + '?debug=1&m=light&_t=' + Date.now() + '#spacetime', 4500);
-    const v = await r.evalx(`(function(){
-      var st = window.__ST; if (!st) return JSON.stringify({ err: 'no __ST' });
-      var out = {};
-      // ① 偏折角：GR = 2×牛顿（数值积分）
-      out.aN = st.defl.newton, out.aGR = st.defl.gr;
-      out.ratio = st.defl.gr / st.defl.newton;
-      // ② 解析公式：1.7511×M/b
-      out.alphaFormula = st.alphaArcsec();
-      // 切到时间膨胀：中子星 r1=2 → √(1-0.344/2)
-      st.P.m = 'clock'; st.P.body = 'ns'; st.P.r1 = 2; st.P.r2 = 12;
-      st.rate1(); // 触发内部计算
-      out.f1 = Math.sqrt(1 - 0.344/2);
-      return JSON.stringify(out);
-    })()`) || {};
-    const okRatio = v.ratio > 1.85 && v.ratio < 2.15;
-    log('── 时空弯曲读数     ' + ((okRatio && !r.errors.length) ? 'PASS' : 'FAIL') +
-      '  α_GR/α_N=' + (v.ratio || 0).toFixed(3) + '（≈2）' +
-      '  α公式=' + (v.alphaFormula || 0).toFixed(3) + '″' +
-      '  中子星光钟速率=' + (v.f1 || 0).toFixed(5) + (r.errors.length ? '  !! ' + r.errors[0] : ''));
-    if (!(okRatio && !r.errors.length)) bad++;
-    await r.close();
-  }
-  {
-    // 红移模式冒烟 + 截图
-    const r = await open(URL_BASE + '?debug=1&m=redshift&body=ns&_t=' + Date.now() + '#spacetime', 4500);
-    const v = await r.evalx(`(function(){
-      var rows = Array.prototype.map.call(document.querySelectorAll('#gravHud .gc-rows .gc-row'), function(e){return e.textContent;});
-      return JSON.stringify({ cards: document.querySelectorAll('#gravHud .gc-card').length,
-        katex: document.querySelectorAll('#gravHud .katex').length, rows: rows.slice(0,6) });
-    })()`) || {};
-    const ok = v.cards === 2 && v.katex >= 2 && !r.errors.length;
-    if (!ok) bad++;
-    log('── 红移模式冒烟     ' + (ok ? 'PASS' : 'FAIL') + '  cards=' + v.cards + ' katex=' + v.katex +
-      '  ' + JSON.stringify(v.rows || []).slice(0, 130) + (r.errors.length ? ' !! ' + r.errors[0] : ''));
-    await r.shot('spacetime-红移.png');
-    await r.close();
-  }
-
-  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ T1 全量 15/15 通过');
+  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ 全量回归 13/13 通过');
   fs.writeFileSync(path.join(ROOT, '_t1_out.txt'), LOG.join('\n'), 'utf8');
   try { child.kill(); } catch (e) {}
   process.exit(0);

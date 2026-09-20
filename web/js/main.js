@@ -47,7 +47,6 @@
       else if (k === '0') idx = 9;          // 0 → 第 10 个
       else if (k === '-') idx = 10;         // - → 第 11 个
       else if (k === '=') idx = 11;         // = → 第 12 个
-      else if (k === 'q') idx = 12;         // q → 第 13 个
       if (idx >= 0) {
         var list = HL.allScenes();
         if (list[idx]) load(list[idx].id);
@@ -181,14 +180,13 @@
     photosynthesis: '叶片 → 叶绿体 → 分子三级缩放，光反应与卡尔文循环',
     maxwell: '四区全景：高斯电 / 磁通量、法拉第感应与位移电流',
     massenergy: '质量—能量天平、湮灭 / 裂变 / 聚变微观动画、太阳 vs 煤球',
-    gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度',
-    spacetime: '光线引力偏折 · 引力时间膨胀 · 引力红移 —— 从牛顿走到爱因斯坦'
+    gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度'
   };
   var galleryEl;
 
   /* 场景目录 · 四章叙事结构 */
   var CHAPTERS = [
-    { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 时空 · 物质与能量 · 电磁之光', ids: ['solar', 'gravity', 'spacetime', 'massenergy', 'maxwell', 'emwave'] },
+    { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
     { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 生命之光', ids: ['periodic', 'molecule', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
     { name: 'Ⅳ · 思维的光芒', sub: '认识自己的大脑', ids: ['neural'] }
@@ -207,7 +205,7 @@
     var used = {};
 
     function keyOf(i) {
-      return i < 9 ? String(i + 1) : (['0', '-', '=', 'q'][i - 9] || '');
+      return i < 9 ? String(i + 1) : (['0', '-', '='][i - 9] || '');
     }
     function addCard(def, i) {
       used[def.id] = true;
