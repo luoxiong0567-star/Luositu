@@ -1,17 +1,20 @@
 /**
  * 场景：元素周期表（3D）
  * 三种布局：经典周期表平面 / 原子序数螺旋 / 原子量地形
- * 点击元素查看物性参数，并生成该原子的简化壳层示意模型
+ * 点击元素卡片绕 Y 轴翻转到背面：展示原子量、电子排布（Madelung 规则 + 例外修正，
+ * 覆盖全部 118 号元素）、熔沸点、常温物态、晶格与典型用途；同时联动玻璃样品舱
+ * 与简化壳层模型。背面贴图懒生成（首次翻转才绘制 canvas），翻转动画用真实时钟
+ * 推进，讲解模式冻结场景时依然流畅。
  */
 HL.registerScene({
   id: 'periodic',
   name: '元素周期表',
-  short: '118 种元素 · 点击采样玻璃舱',
+  short: '118 种元素 · 点击卡片翻面看详情',
   icon: '⚛',
   fov: 48,
   minDistance: 4,
   maxDistance: 200,
-  desc: '118 种元素按周期与族排布，颜色区分类别。切换布局可观察原子序数的连续性与相对原子质量的增长趋势。点击任一元素查看细节，并在右侧玻璃样品舱中按真实熔点/沸点呈现气 / 液 / 固三态。',
+  desc: '118 种元素按周期与族排布，颜色区分类别。切换布局可观察原子序数的连续性与相对原子质量的增长趋势。点击任一元素：卡片翻转到背面，展示该元素的详细信息——原子量、电子排布、熔沸点、常温物态、晶格与典型用途；同时联动右侧玻璃样品舱与原子壳层模型。',
 
   controls: [
     { type: 'button', key: 'tour', label: '📖 讲解模式' },
@@ -21,6 +24,7 @@ HL.registerScene({
       { label: '质量地形', value: 'mass' }
     ] },
     { type: 'check', key: 'atom', label: '显示原子壳层模型', value: true },
+    { type: 'check', key: 'flip', label: '点击卡片 → 翻面看详情', value: true },
     { type: 'check', key: 'chamber', label: '点击元素 → 玻璃样品舱', value: true },
     { type: 'range', key: 'logT', label: '样品舱温度 log₁₀(T / K)', min: 0.7, max: 3.8, step: 0.005, value: 2.474 },
     { type: 'check', key: 'refract', label: '玻璃折射（关闭可提速）', value: true },
@@ -36,7 +40,7 @@ HL.registerScene({
     var THREE = ctx.THREE, scene = ctx.scene, camera = ctx.camera;
     scene.add(ctx.makeStars(1800, 400));
 
-    var params = { mode: 'table', atom: true, autoRotate: false, chamber: true, logT: 2.474, refract: true };
+    var params = { mode: 'table', atom: true, autoRotate: false, chamber: true, flip: true, logT: 2.474, refract: true };
     var blocks = [];
     var pickables = [];
     var hovered = null;
@@ -83,7 +87,9 @@ HL.registerScene({
       mesh.userData.el = e;
       scene.add(mesh);
       pickables.push(mesh);
-      blocks.push({ mesh: mesh, target: pos.clone(), base: color.clone(), Z: Z });
+      var b = { mesh: mesh, target: pos.clone(), base: color.clone(), Z: Z, fp: 0, ft: 0, anim: null, back: null };
+      mesh.userData.block = b;
+      blocks.push(b);
     });
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.75));
@@ -185,7 +191,7 @@ HL.registerScene({
     ctx.controls.target.set(1.9, 0, 0);
 
     if (location.search.indexOf('debug=1') >= 0) {
-      window.__PT = { chamber: chamber, camera: camera, THREE: THREE, atomRoot: atomRoot };
+      window.__PT = { chamber: chamber, camera: camera, THREE: THREE, atomRoot: atomRoot, cfg: electronCfg, blocks: blocks, controls: ctx.controls };
     }
 
     /* ---------- 交互 ---------- */
@@ -209,8 +215,48 @@ HL.registerScene({
     }
     ctx.canvas.addEventListener('pointermove', onMove);
 
+    /* ---------- 卡片翻面：背面详情 ---------- */
+    /** 背面贴图懒生成——只在第一次翻转时绘制，避免 118 张 canvas 的初始化开销 */
+    function ensureBack(b) {
+      if (b.back) return;
+      var back = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({
+        map: makeBack(b.mesh.userData.el), transparent: true
+      }));
+      back.rotation.y = Math.PI;          // 贴图朝 -Z；卡片整体翻 180° 后正对观察者
+      back.position.z = -0.12;
+      b.mesh.add(back);
+      b.back = back;
+    }
+
+    function flipTo(b, target) {
+      if (b.ft === target && !b.anim) return;
+      if (target === 1) ensureBack(b);
+      b.ft = target;
+      b.anim = { from: b.fp, to: target, t0: performance.now(), dur: 520 };
+    }
+
+    function unflipAll(except) {
+      blocks.forEach(function (b) { if (b !== except && b.ft === 1) flipTo(b, 0); });
+    }
+
+    /** 用真实时钟推进翻转动画——讲解模式冻结场景(dt=0)时依然流畅 */
+    function tickFlips() {
+      var now = performance.now();
+      blocks.forEach(function (b) {
+        if (!b.anim) return;
+        var t = (now - b.anim.t0) / b.anim.dur;
+        if (t >= 1) { b.fp = b.anim.to; b.anim = null; }
+        else {
+          var e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;   // easeInOutCubic
+          b.fp = b.anim.from + (b.anim.to - b.anim.from) * e;
+        }
+        b.mesh.rotation.y = b.fp * Math.PI;
+      });
+    }
+
     var api = {
       update: function (dt, time) {
+        tickFlips();
         tour.update(dt, time || 0, function (ddt, dtime) {
           var k = 1 - Math.pow(0.001, ddt);           // 与帧率无关的插值系数
           blocks.forEach(function (b) {
@@ -233,6 +279,7 @@ HL.registerScene({
         if (key === 'logT') chamber.setTemperature(Math.pow(10, v));
         if (key === 'refract') chamber.setRefract(v);
         if (key === 'chamber' && !v) chamber.setVisible(false);
+        if (key === 'flip' && !v) unflipAll();
         if (key === 'mode') {
           blocks.forEach(function (b, i) {
             if (b.isPh) {
@@ -251,18 +298,29 @@ HL.registerScene({
       onClick: function (ndc) {
         ray.setFromCamera({ x: ndc.x, y: ndc.y }, camera);
         var hit = ray.intersectObjects(pickables, false);
-        if (!hit.length) { HL.tooltip.hide(); return; }
-        var e = hit[0].object.userData.el;
+        if (!hit.length) { HL.tooltip.hide(); unflipAll(); return; }
+        var mesh = hit[0].object;
+        var e = mesh.userData.el;
         var Z = e[0], sym = e[1], zh = e[2], mass = e[3], cat = e[4], period = e[5], group = e[6];
 
-        var name = zh || ('第 ' + Z + ' 号元素（人工合成）');
-        var html = '<div class="tt-title">' + (zh ? zh + ' · ' : '') + sym + '　' + Z + '</div>';
-        html += '<div class="tt-row">中文名：<b>' + name + '</b></div>';
-        html += '<div class="tt-row">相对原子质量：<b>' + mass + '</b></div>';
-        html += '<div class="tt-row">类别：<b style="color:' + (HL.ELEMENT_CATEGORIES[cat] || '#fff') + '">' + cat + '</b></div>';
-        html += '<div class="tt-row">位置：<b>第 ' + period + ' 周期' + (group ? '　第 ' + group + ' 族' : '　镧/锕系') + '</b></div>';
-        if (HL.SHELL_HINT[Z]) html += '<div class="tt-row">电子排布：<b>' + HL.SHELL_HINT[Z] + '</b></div>';
-        HL.tooltip.show(html, ndc.clientX, ndc.clientY);
+        if (params.flip) {
+          /* 翻面模式：背面即信息卡（名称/原子量/电子排布/熔沸点/晶格/用途） */
+          var b = mesh.userData.block;
+          var to = b.ft === 1 ? 0 : 1;
+          if (to === 1) unflipAll(b);          // 同一时间只翻一张
+          flipTo(b, to);
+          HL.tooltip.hide();
+        } else {
+          /* 传统模式：浮层信息卡 */
+          var name = zh || ('第 ' + Z + ' 号元素（人工合成）');
+          var html = '<div class="tt-title">' + (zh ? zh + ' · ' : '') + sym + '　' + Z + '</div>';
+          html += '<div class="tt-row">中文名：<b>' + name + '</b></div>';
+          html += '<div class="tt-row">相对原子质量：<b>' + mass + '</b></div>';
+          html += '<div class="tt-row">类别：<b style="color:' + (HL.ELEMENT_CATEGORIES[cat] || '#fff') + '">' + cat + '</b></div>';
+          html += '<div class="tt-row">位置：<b>第 ' + period + ' 周期' + (group ? '　第 ' + group + ' 族' : '　镧/锕系') + '</b></div>';
+          html += '<div class="tt-row">电子排布：<b>' + electronCfg(Z) + '</b></div>';
+          HL.tooltip.show(html, ndc.clientX, ndc.clientY);
+        }
 
         if (params.atom) buildAtom(Z);
         if (params.chamber) {
@@ -276,6 +334,12 @@ HL.registerScene({
       dispose: function () {
         tour.dispose();
         ctx.canvas.removeEventListener('pointermove', onMove);
+        blocks.forEach(function (b) {              // 背面贴图显式回收（正面/方块由场景管理器统一回收）
+          if (b.back) {
+            if (b.back.material.map) b.back.material.map.dispose();
+            b.back.material.dispose();
+          }
+        });
         chamber.dispose();
       }
     };
@@ -298,7 +362,7 @@ HL.registerScene({
       {
         t: '二、门捷列夫的预言',
         d: '1869 年门捷列夫按原子量排列当时已知的 63 种元素，发现性质周期性重现，于是大胆留出空位、预言「类铝」「类硅」的原子量与密度——后来的镓与锗，性质几乎分毫不差。周期表从此不再是经验的堆砌，而是有预言力的定律。其真正原因要到 50 年后量子力学才揭晓：周期律的本质是电子的分层排布。',
-        exp: '点击第 31、32 号（镓、锗），看它们的位置与性质。',
+        exp: '点击第 31、32 号（镓、锗）——卡片会翻到背面，对照门捷列夫的预言看它们的原子量与性质。',
         cam: [[4, 1, 22], [4, 0.2, 0]],
         pulse: null
       },
@@ -342,6 +406,7 @@ HL.registerScene({
       }
     ]);
 
+    if (location.search.indexOf('debug=1') >= 0 && window.__PT) window.__PT.api = api;
     return api;
   }
 });
@@ -403,6 +468,165 @@ function makeFace(e) {
   c.fillStyle = 'rgba(255,255,255,0.4)';
   c.font = '400 17px "Segoe UI", sans-serif';
   c.fillText(String(mass), 80, 152);
+
+  var tex = new THREE.CanvasTexture(cv);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+/* ======================================================================
+   电子排布生成器：Madelung 构造规则 + 已知例外修正，覆盖全部 118 号元素
+   ====================================================================== */
+var _CFG_ORDER = ['1s', '2s', '2p', '3s', '3p', '4s', '3d', '4p', '5s', '4d', '5p', '6s', '4f', '5d', '6p', '7s', '5f', '6d', '7p'];
+var _CFG_CAP = { s: 2, p: 6, d: 10, f: 14 };
+var _CFG_NOBLE = [[2, 'He'], [10, 'Ne'], [18, 'Ar'], [36, 'Kr'], [54, 'Xe'], [86, 'Rn']];
+var _CFG_SUP = { '0': '\u2070', '1': '\u00b9', '2': '\u00b2', '3': '\u00b3', '4': '\u2074', '5': '\u2075', '6': '\u2076', '7': '\u2077', '8': '\u2078', '9': '\u2079' };
+/* 构造规则之外的实验排布例外（Cr、Cu、Nb、Mo、Ru、Rh、Pd、Ag、La、Ce、Gd、Pt、Au、Ac、Th、Pa、U、Np、Cm、Lr） */
+var _CFG_EXC = {
+  24: { '3d': 5, '4s': 1 }, 29: { '3d': 10, '4s': 1 },
+  41: { '4d': 4, '5s': 1 }, 42: { '4d': 5, '5s': 1 },
+  44: { '4d': 7, '5s': 1 }, 45: { '4d': 8, '5s': 1 },
+  46: { '4d': 10, '5s': 0 }, 47: { '4d': 10, '5s': 1 },
+  57: { '4f': 0, '5d': 1 }, 58: { '4f': 1, '5d': 1 }, 64: { '4f': 7, '5d': 1 },
+  78: { '5d': 9, '6s': 1 }, 79: { '5d': 10, '6s': 1 },
+  89: { '5f': 0, '6d': 1 }, 90: { '5f': 0, '6d': 2 }, 91: { '5f': 2, '6d': 1 },
+  92: { '5f': 3, '6d': 1 }, 93: { '5f': 4, '6d': 1 }, 96: { '5f': 7, '6d': 1 },
+  103: { '5f': 14, '6d': 0, '7p': 1 }
+};
+var _CFG_CACHE = {};
+
+function electronCfg(Z) {
+  if (_CFG_CACHE[Z]) return _CFG_CACHE[Z];
+  var i, o, n;
+  var occ = {}, left = Z;
+  for (i = 0; i < _CFG_ORDER.length && left > 0; i++) {
+    o = _CFG_ORDER[i];
+    n = Math.min(_CFG_CAP[o.charAt(1)], left);
+    occ[o] = n; left -= n;
+  }
+  var exc = _CFG_EXC[Z];
+  if (exc) for (var k in exc) occ[k] = exc[k];
+
+  /* 稀有气体实心简写 */
+  var core = null, coreZ = 0;
+  for (i = 0; i < _CFG_NOBLE.length; i++) if (_CFG_NOBLE[i][0] < Z) { core = _CFG_NOBLE[i]; coreZ = _CFG_NOBLE[i][0]; }
+  var coreOcc = {};
+  if (core) {
+    left = coreZ;
+    for (i = 0; i < _CFG_ORDER.length && left > 0; i++) {
+      o = _CFG_ORDER[i];
+      n = Math.min(_CFG_CAP[o.charAt(1)], left);
+      coreOcc[o] = n; left -= n;
+    }
+  }
+
+  /* 价层轨道按主量子数 → 角量子数排序输出（如 3d⁶4s²） */
+  var parts = [];
+  for (i = 0; i < _CFG_ORDER.length; i++) {
+    o = _CFG_ORDER[i];
+    var v = (occ[o] || 0) - (coreOcc[o] || 0);
+    if (v > 0) parts.push([o, v]);
+  }
+  parts.sort(function (a, b) {
+    var na = +a[0].charAt(0), nb = +b[0].charAt(0);
+    if (na !== nb) return na - nb;
+    return 'spdf'.indexOf(a[0].charAt(1)) - 'spdf'.indexOf(b[0].charAt(1));
+  });
+  var s = (core ? '[' + core[1] + ']' : '') + parts.map(function (p) {
+    return p[0] + String(p[1]).split('').map(function (d) { return _CFG_SUP[d]; }).join('');
+  }).join('');
+  _CFG_CACHE[Z] = s;
+  return s;
+}
+
+/* ======================================================================
+   元素块背面贴图：详细信息卡（与正面同风格：深底 + 类别色描边）
+   ====================================================================== */
+var BACK_LATTICE = { fcc: '面心立方', bcc: '体心立方', hcp: '密排六方', dia: '金刚石型' };
+
+function makeBack(e) {
+  var Z = e[0], sym = e[1], zh = e[2], mass = e[3], cat = e[4], period = e[5], group = e[6];
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  var c = cv.getContext('2d');
+  var col = HL.ELEMENT_CATEGORIES[cat] || '#8899aa';
+
+  function hexA(hex, a) {
+    return 'rgba(' + parseInt(hex.slice(1, 3), 16) + ',' + parseInt(hex.slice(3, 5), 16) + ',' +
+      parseInt(hex.slice(5, 7), 16) + ',' + a + ')';
+  }
+  function mixLabel(y, label, value, vx, vcol) {
+    c.font = '400 16px "Microsoft YaHei", sans-serif';
+    c.fillStyle = 'rgba(150,168,192,0.95)';
+    c.fillText(label, 18, y);
+    c.font = '600 16px "Microsoft YaHei", "Segoe UI", sans-serif';
+    c.fillStyle = vcol || 'rgba(235,244,255,0.92)';
+    c.fillText(value, vx, y);
+  }
+
+  c.fillStyle = 'rgba(6,10,20,0.94)';
+  c.fillRect(0, 0, 256, 256);
+  c.strokeStyle = col;
+  c.lineWidth = 5;
+  c.strokeRect(2.5, 2.5, 251, 251);
+
+  /* 顶部信息带：原子序数 + 类别 */
+  c.fillStyle = hexA(col, 0.14);
+  c.fillRect(5, 5, 246, 32);
+  c.textBaseline = 'alphabetic';
+  c.fillStyle = 'rgba(255,255,255,0.62)';
+  c.font = '600 19px "Segoe UI", sans-serif';
+  c.textAlign = 'left';
+  c.fillText(String(Z), 14, 28);
+  c.fillStyle = col;
+  c.font = '500 16px "Microsoft YaHei", sans-serif';
+  c.textAlign = 'right';
+  c.fillText(cat, 242, 28);
+
+  /* 名称 / 符号 / 原子量 */
+  c.textAlign = 'center';
+  c.fillStyle = 'rgba(235,244,255,0.96)';
+  c.font = '700 38px "Microsoft YaHei", "Segoe UI", sans-serif';
+  c.fillText(zh ? zh + '  ' + sym : sym, 128, 77);
+  c.fillStyle = 'rgba(190,205,225,0.9)';
+  c.font = '400 17px "Microsoft YaHei", sans-serif';
+  c.fillText('原子量 ' + mass, 128, 103);
+
+  /* 分隔线 */
+  c.strokeStyle = hexA(col, 0.42);
+  c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(18, 115); c.lineTo(238, 115); c.stroke();
+
+  var d = GC_THERMO[Z - 1] || [];
+  var pos = group ? '第' + period + '周期 · 第' + group + '族'
+    : (Z >= 89 ? '锕系' : '镧系') + ' · 第' + period + '周期';
+
+  c.textAlign = 'left';
+  mixLabel(138, '位置', pos, 74);
+  mixLabel(160, '排布', electronCfg(Z), 74, col);
+  mixLabel(182, '熔沸点', (d[1] ? Math.round(d[1]) + ' K' : '—') + ' / ' + (d[2] ? Math.round(d[2]) + ' K' : '—'), 84);
+  var stName = d[0] === 'g' ? '气态' : d[0] === 'l' ? '液态' : '固态';
+  var latName = BACK_LATTICE[d[4]] || '';
+  mixLabel(204, '性质', stName + (latName ? ' · ' + latName : ''), 74);
+
+  /* 用途（最多两行，超出省略号截断） */
+  if (d[3]) {
+    c.font = '400 13px "Microsoft YaHei", sans-serif';
+    c.fillStyle = hexA(col, 0.95);
+    var chars = d[3].split('');
+    var line = '', lines = [];
+    for (var i = 0; i < chars.length && lines.length < 2; i++) {
+      if (c.measureText(line + chars[i]).width > 220) { lines.push(line); line = chars[i]; }
+      else line += chars[i];
+    }
+    if (lines.length < 2) lines.push(line);
+    else if (i < chars.length) {
+      var l2 = lines[1];
+      while (l2 && c.measureText(l2 + '…').width > 220) l2 = l2.slice(0, -1);
+      lines[1] = l2 + '…';
+    }
+    lines.slice(0, 2).forEach(function (ln, li) { c.fillText(ln, 18, 227 + li * 16); });
+  }
 
   var tex = new THREE.CanvasTexture(cv);
   tex.minFilter = THREE.LinearFilter;
