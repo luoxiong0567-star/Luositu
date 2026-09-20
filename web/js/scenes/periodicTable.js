@@ -107,9 +107,28 @@ HL.registerScene({
     scene.add(atomRoot);
     var atomParts = [];
 
-    function buildAtom(Z) {
-      atomParts.forEach(function (o) { atomRoot.remove(o); HL.disposeObject(o); });
+    /* 共享几何/材质：电子球最多 118 个，避免每次点击反复创建销毁 GPU 资源 */
+    var GEO_E = new THREE.SphereGeometry(0.085, 12, 8);
+    var MAT_E = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x1d5d7a, roughness: 0.3 });
+    var GEO_N = new THREE.SphereGeometry(0.42, 28, 20);
+    var MAT_N = new THREE.MeshStandardMaterial({ color: 0xffcf6b, emissive: 0x8a5a00, roughness: 0.35 });
+    var GEO_RING = new THREE.TorusGeometry(1, 0.02, 8, 90);
+    var MAT_RING = new THREE.MeshBasicMaterial({ color: 0x4de2ff, transparent: true, opacity: 0.4 });
+
+    /** 只移除不销毁共享资源；own=true 的（环、文字）才释放 */
+    function clearAtom() {
+      atomParts.forEach(function (o) {
+        atomRoot.remove(o);
+        if (o.userData && o.userData.own) {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+        }
+      });
       atomParts = [];
+    }
+
+    function buildAtom(Z) {
+      clearAtom();
 
       var rest = Z, shells = [];
       for (var s = 0; s < SHELL_MAX.length && rest > 0; s++) {
@@ -117,10 +136,7 @@ HL.registerScene({
         shells.push(n); rest -= n;
       }
 
-      var nucleus = new THREE.Mesh(
-        new THREE.SphereGeometry(0.42, 28, 20),
-        new THREE.MeshStandardMaterial({ color: 0xffcf6b, emissive: 0x8a5a00, roughness: 0.35 })
-      );
+      var nucleus = new THREE.Mesh(GEO_N, MAT_N);
       atomRoot.add(nucleus);
       atomParts.push(nucleus);
 
@@ -131,9 +147,8 @@ HL.registerScene({
 
       shells.forEach(function (count, li) {
         var R = 0.95 + li * 0.62;
-        var ringGeo = new THREE.TorusGeometry(R, 0.018, 8, 90);
-        var ringMat = new THREE.MeshBasicMaterial({ color: 0x4de2ff, transparent: true, opacity: 0.4 });
-        var ring = new THREE.Mesh(ringGeo, ringMat);
+        var ring = new THREE.Mesh(GEO_RING, MAT_RING);   // 单位环按半径缩放，避免每壳层新建几何
+        ring.scale.set(R, R, R);
         ring.rotation.x = Math.PI / 2 + (li % 2 ? 0.5 : -0.35);
         ring.rotation.z = li * 0.6;
         atomRoot.add(ring);
@@ -143,10 +158,7 @@ HL.registerScene({
         holder.rotation.copy(ring.rotation);
         for (var k = 0; k < count; k++) {
           var a = (k / count) * Math.PI * 2;
-          var eMesh = new THREE.Mesh(
-            new THREE.SphereGeometry(0.085, 12, 8),
-            new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x1d5d7a, roughness: 0.3 })
-          );
+          var eMesh = new THREE.Mesh(GEO_E, MAT_E);
           eMesh.position.set(Math.cos(a) * R, Math.sin(a) * R, 0);
           holder.add(eMesh);
         }
@@ -156,11 +168,13 @@ HL.registerScene({
 
       var lb = ctx.makeText('Z = ' + Z + '　壳层 ' + shells.join('·'), { size: 34, scale: 1.1, color: '#ffcf6b' });
       lb.position.set(0, -2.6, 0);
+      lb.userData.own = true;
       atomRoot.add(lb);
       atomParts.push(lb);
 
       var note = ctx.makeText('玻尔简化壳层示意', { size: 26, scale: 0.9, color: '#6f7f9a' });
       note.position.set(0, -3.1, 0);
+      note.userData.own = true;
       atomRoot.add(note);
       atomParts.push(note);
     }
@@ -172,7 +186,7 @@ HL.registerScene({
     chamber.group.scale.setScalar(0.46);
     chamber.group.visible = false;
     scene.add(chamber.group);
-    chamber.setRefract(params.refract);
+    chamber.setRefract(params.refract, 'init');
     chamber.setTemperature(Math.pow(10, params.logT));
 
     var chHint = ctx.makeText('点击任意元素 → 玻璃样品舱采样', { size: 30, scale: 1.0, color: '#6f7f9a' });
@@ -228,11 +242,14 @@ HL.registerScene({
       b.back = back;
     }
 
+    var activeFlips = [];                          // 只遍历正在动画的卡片，避免每帧扫全部 120 张
+
     function flipTo(b, target) {
       if (b.ft === target && !b.anim) return;
       if (target === 1) ensureBack(b);
       b.ft = target;
       b.anim = { from: b.fp, to: target, t0: performance.now(), dur: 520 };
+      if (activeFlips.indexOf(b) < 0) activeFlips.push(b);
     }
 
     function unflipAll(except) {
@@ -241,17 +258,23 @@ HL.registerScene({
 
     /** 用真实时钟推进翻转动画——讲解模式冻结场景(dt=0)时依然流畅 */
     function tickFlips() {
+      if (!activeFlips.length) return;
       var now = performance.now();
-      blocks.forEach(function (b) {
-        if (!b.anim) return;
+      for (var i = activeFlips.length - 1; i >= 0; i--) {
+        var b = activeFlips[i];
         var t = (now - b.anim.t0) / b.anim.dur;
-        if (t >= 1) { b.fp = b.anim.to; b.anim = null; }
-        else {
+        if (t >= 1) {
+          b.fp = b.anim.to; b.anim = null;
+          b.mesh.rotation.y = b.fp * Math.PI;
+          b.mesh.scale.setScalar(1);
+          activeFlips.splice(i, 1);
+        } else {
           var e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;   // easeInOutCubic
           b.fp = b.anim.from + (b.anim.to - b.anim.from) * e;
+          b.mesh.rotation.y = b.fp * Math.PI;
+          b.mesh.scale.setScalar(1 + 0.14 * Math.sin(b.fp * Math.PI));         // 翻转中轻微放大，反馈更明显
         }
-        b.mesh.rotation.y = b.fp * Math.PI;
-      });
+      }
     }
 
     var api = {
@@ -273,11 +296,11 @@ HL.registerScene({
         });
       },
 
-      setParam: function (key, v) {
+      setParam: function (key, v, user) {
         if (key === 'tour') { tour.toggle(); return; }
         params[key] = v;
         if (key === 'logT') chamber.setTemperature(Math.pow(10, v));
-        if (key === 'refract') chamber.setRefract(v);
+        if (key === 'refract') chamber.setRefract(v, user ? 'user' : 'init');
         if (key === 'chamber' && !v) chamber.setVisible(false);
         if (key === 'flip' && !v) unflipAll();
         if (key === 'mode') {
@@ -334,6 +357,8 @@ HL.registerScene({
       dispose: function () {
         tour.dispose();
         ctx.canvas.removeEventListener('pointermove', onMove);
+        clearAtom();
+        [GEO_E, MAT_E, GEO_N, MAT_N, GEO_RING, MAT_RING].forEach(function (r) { r.dispose(); });
         blocks.forEach(function (b) {              // 背面贴图显式回收（正面/方块由场景管理器统一回收）
           if (b.back) {
             if (b.back.material.map) b.back.material.map.dispose();
@@ -996,6 +1021,11 @@ var GC_THERMO = [
     lbName.sprite.position.set(0, -half - 1.25, 0);
     var lbInfo = Label(THREE, cell, 0.6, {});
     lbInfo.sprite.position.set(0, -half - 2.25, 0);
+    /* 自动降级提示（默认隐藏） */
+    var lbPerf = Label(THREE, cell, 0.52, {});
+    lbPerf.sprite.position.set(0, -half - 3.15, 0);
+    lbPerf.set('\u6027\u80fd\u4f18\u5148\uff1a\u5df2\u81ea\u52a8\u5173\u95ed\u73bb\u7483\u6298\u5c04', '#ffd76e', 60);
+    lbPerf.sprite.visible = false;
 
     /* ==================================================================
        内部样品：气 / 液 / 固
@@ -1132,7 +1162,9 @@ var GC_THERMO = [
        ================================================================== */
     var st = {
       el: null, Tk: 298, vis: false, k: 0,
-      wS: 1, wL: 0, wG: 0, lat: 'fcc', Tm: 1000, Tb: 5000, color: 0x6fe3ff
+      wS: 1, wL: 0, wG: 0, lat: 'fcc', Tm: 1000, Tb: 5000, color: 0x6fe3ff,
+      refract: true, forceRefract: false,          // forceRefract：用户明确要求折射，不再自动降级
+      perfAcc: 0, perfN: 0, autoOff: 0             // autoOff：自动降级后的提示剩余时间
     };
 
     function setElement(e) {
@@ -1157,7 +1189,25 @@ var GC_THERMO = [
 
     function setTemperature(Tk) { st.Tk = Tk; updateTags(); }
 
-    function setRefract(on) { shell.material = on ? matRefract : matPlain; }
+    /* 折射（transmission）每帧要额外渲染一遍场景，弱设备上会明显掉帧。
+       帧率低于 24fps 时自动降级为轻量玻璃，用户手动开启过则尊重用户选择。 */
+    /* mode: 'init' 初始化 | 'user' 用户手动 | 'auto' 帧率守卫自动降级 */
+    function setRefract(on, mode) {
+      st.refract = on;
+      shell.material = on ? matRefract : matPlain;
+      if (mode === 'user') st.forceRefract = on;
+      if (mode === 'auto' && !on) st.autoOff = 4.5;
+    }
+
+    function guardPerf(dt) {
+      if (!st.refract || !st.vis) { st.perfAcc = 0; st.perfN = 0; return; }
+      st.perfAcc += dt; st.perfN++;
+      if (st.perfAcc < 0.55) return;                // 按时间窗口判定：弱设备上 0.6s 内即可降级
+      var fps = st.perfN / Math.max(1e-6, st.perfAcc);
+      st.perfAcc = 0; st.perfN = 0;
+      // 用户手动开过折射时阈值放宽（尊重选择），但极端掉帧仍兜底降级
+      if (fps < (st.forceRefract ? 12 : 24)) setRefract(false, 'auto');
+    }
 
     function setVisible(v) { st.vis = v; if (v) root.visible = true; }
 
@@ -1170,7 +1220,12 @@ var GC_THERMO = [
       root.visible = true;
       var s = 0.55 + 0.45 * st.k;
       cell.scale.setScalar(s);
-      cell.traverse(function (o) { if (o.material && o.material.opacity !== undefined) { o.material.transparent = true; } });
+
+      guardPerf(dt);                     // 帧率守卫：折射开销过大时自动降级
+      if (st.autoOff > 0) {              // 降级后短暂提示，说明发生了什么
+        st.autoOff -= dt;
+        lbPerf.sprite.visible = st.autoOff > 0;
+      } else lbPerf.sprite.visible = false;
 
       volMat.uniforms.uTime.value = time;
       liqMat.uniforms.uTime.value = time;
@@ -1267,6 +1322,7 @@ var GC_THERMO = [
       update: update,
       dispose: dispose,
       isVisible: function () { return st.vis; },
+      refractOn: function () { return st.refract; },   // 帧率守卫自动降级后为 false
       info: function () {
         var d = TH[(st.el ? st.el[0] : 1) - 1] || [];
         return {

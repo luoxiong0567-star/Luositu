@@ -1,0 +1,12 @@
+── gallery    PASS  cards=13 imgs=13  十三个三维科学可视化场景 · 四章之旅 · 点击卡片进入 · Esc 返回目录 · 作者 罗司徒
+── gravity?well      PASS  cards=3 katex=3 ctl=10
+── gravity?binary    PASS  cards=3 katex=2 ctl=10
+── gravity?kepler    PASS  cards=3 katex=3 ctl=8
+── gravity?threebody PASS  cards=3 katex=3 ctl=8
+── gravity?tidal     PASS  cards=3 katex=2 ctl=10
+── gravity?escape    PASS  cards=3 katex=2 ctl=9
+── solar       PASS  太阳系
+── periodic    PASS  元素周期表
+── massenergy  PASS  质能方程
+
+✅ 单文件隔离冒烟全部通过  (2.02 MB)

@@ -67,9 +67,26 @@ function httpReq(url, method) {
     if (s && s.data) fs.writeFileSync(path.join(ROOT, 'docs', file), Buffer.from(s.data, 'base64'));
   };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function clickAt(x, y) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x, y: y, button: 'none', buttons: 0 });
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x, y: y, button: 'left', buttons: 1, clickCount: 1 });
+    await sleep(50);
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x, y: y, button: 'left', buttons: 0, clickCount: 1 });
+  }
+  /** 注入活跃 rAF：headless 后台标签会节流 requestAnimationFrame，动画推进观察不到 */
+  async function keepAlive() {
+    return evalx('window.__ka=true;(function l(){if(!window.__ka)return;requestAnimationFrame(l);})();JSON.stringify({ok:1})');
+  }
+  async function fps(ms) {
+    await evalx('window.__fps={n:0};window.__fpsStop=false;(function loop(){if(window.__fpsStop)return;window.__fps.n++;requestAnimationFrame(loop);})();JSON.stringify({ok:1})');
+    await sleep(ms || 2000);
+    const v = await evalx('window.__fpsStop=true;JSON.stringify({n:window.__fps.n})');
+    return v ? Math.round(v.n / ((ms || 2000) / 1000) * 10) / 10 : -1;
+  }
 
   await send('Page.navigate', { url: URL_BASE + '?debug=1&_t=' + Date.now() + '#periodic' });
   await sleep(4500);
+  await keepAlive();
 
   /* ---------- A. 电子排布全覆盖（对照 SHELL_HINT 参考值 + 例外元素） ---------- */
   {
@@ -196,10 +213,71 @@ function httpReq(url, method) {
       (ok ? '' : '  ' + JSON.stringify(v)));
   }
 
+  /* ---------- B2. 真实鼠标点击翻面（safeArea 会偏移视锥，故全表扫描而非只看 Fe） ---------- */
+  {
+    // 前面的用例可能已关闭翻面开关，这里显式打开后再走真实点击
+    await evalx('HL.manager.inst.setParam("flip", true);JSON.stringify({ok:1})');
+    const pt = await evalx(`(function(){
+      var P = window.__PT;
+      var b = P.blocks.filter(function(x){return x.Z===26;})[0];
+      var v = new P.THREE.Vector3().copy(b.mesh.position).project(P.camera);
+      return JSON.stringify({ x: Math.round((v.x+1)/2*1280), y: Math.round((1-v.y)/2*760) });
+    })()`) || { x: 640, y: 380 };
+    await clickAt(pt.x, pt.y);
+    await sleep(1200);
+    const scan = await evalx(`(function(){
+      var P = window.__PT;
+      var fl = P.blocks.filter(function(b){ return b.ft===1; });
+      return JSON.stringify({
+        count: fl.length,
+        z: fl.length ? fl[0].Z : null,
+        rot: fl.length ? +fl[0].mesh.rotation.y.toFixed(3) : null,
+        scale: fl.length ? +fl[0].mesh.scale.x.toFixed(3) : null,
+        back: fl.length ? (fl[0].back && fl[0].back.material.map ? fl[0].back.material.map.image.width : 0) : 0
+      });
+    })()`) || {};
+    const okReal = scan.count === 1 && Math.abs(scan.rot - Math.PI) < 0.03 &&
+      Math.abs(scan.scale - 1) < 0.01 && scan.back === 256;
+    if (!okReal) bad++;
+    log('── 真实鼠标点击翻面  ' + (okReal ? 'PASS' : 'FAIL') +
+      '  命中 Z=' + scan.z + ' 翻开数=' + scan.count + ' rot=' + scan.rot +
+      ' scale=' + scan.scale + ' 背面=' + scan.back + 'px' + (okReal ? '' : '  ' + JSON.stringify(scan)));
+
+    // 再点一次同位置 → 翻回
+    await clickAt(pt.x, pt.y);
+    await sleep(1200);
+    const scan2 = await evalx(`JSON.stringify({n: window.__PT.blocks.filter(function(b){return b.ft===1;}).length})`) || {};
+    const okBack = scan2.n === 0;
+    if (!okBack) bad++;
+    log('── 再点翻回          ' + (okBack ? 'PASS' : 'FAIL') + '  剩余翻开=' + scan2.n);
+  }
+
+  /* ---------- F. 性能守卫：玻璃舱折射掉帧时自动降级 ---------- */
+  {
+    const f0 = await fps(1800);
+    await evalx(`(function(){
+      var P = window.__PT;
+      var b = P.blocks.filter(function(x){return x.Z===8;})[0];
+      var v = new P.THREE.Vector3().copy(b.mesh.position).project(P.camera);
+      P.api.onClick({x:v.x, y:v.y, clientX:640, clientY:380});
+      return JSON.stringify({ok:1});
+    })()`);
+    await sleep(2600);                       // 留给帧率守卫判定
+    const st = await evalx(`JSON.stringify({ refract: window.__PT.chamber.refractOn(), vis: window.__PT.chamber.isVisible() })`) || {};
+    const f1 = await fps(1800);
+    const okPerf = st.vis === true && st.refract === false && f1 > f0 * 0.45;
+    if (!okPerf) bad++;
+    log('── 性能守卫          ' + (okPerf ? 'PASS' : 'FAIL') +
+      '  点击前 ' + f0 + 'fps → 点击后 ' + f1 + 'fps' +
+      ' 玻璃舱=' + st.vis + ' 折射自动降级=' + (st.refract === false) +
+      (okPerf ? '' : '  ' + JSON.stringify(st)));
+  }
+
   /* ---------- D. 传统浮层模式仍可用 ---------- */
   {
     const v = await evalx(`(function(){
       var P = window.__PT;
+      HL.manager.inst.setParam('flip', false);      // 回到传统浮层模式
       var b = P.blocks.filter(function(x){return x.Z===6;})[0];
       var v2 = new P.THREE.Vector3().copy(b.mesh.position).project(P.camera);
       P.api.onClick({ x: v2.x, y: v2.y, clientX: 640, clientY: 380 });
@@ -232,7 +310,7 @@ function httpReq(url, method) {
   const errOk = errors.length === 0;
   if (!errOk) bad++;
   log('── 运行时异常        ' + (errOk ? 'PASS' : 'FAIL') + (errOk ? '' : '  ' + errors.join(' | ')));
-  log(errOk && bad === 0 ? '\n✅ 周期表翻面全量 ' + (6 - bad) + '/6 通过' : '\n❌ ' + bad + ' 项失败');
+  log(errOk && bad === 0 ? '\n✅ 周期表翻面全量 ' + (9 - bad) + '/6 通过' : '\n❌ ' + bad + ' 项失败');
 
   try { ws.close(); } catch (e) {}
   await httpReq('http://127.0.0.1:' + PORT + '/json/close/' + t.id).catch(() => {});

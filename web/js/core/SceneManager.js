@@ -133,7 +133,8 @@
       var d = Math.hypot(e.clientX - self._down.x, e.clientY - self._down.y);
       var dt = performance.now() - self._down.t;
       self._down = null;
-      if (d > 5 || dt > 500) return;                 // 拖拽视为视角操作，不触发拾取
+      // 阈值放宽：慢速点击/轻微手抖不应被判为视角拖拽（否则用户会觉得"点了没反应"）
+      if (d > 8 || dt > 800) return;
       var r = canvas.getBoundingClientRect();
       self.inst.onClick({
         x: ((e.clientX - r.left) / r.width) * 2 - 1,

@@ -1,0 +1,17 @@
+fix(periodic): 修复点元素后卡顿 + 点击拾取过严导致的「点了没反应」
+
+性能（实测点击后 35 → 7.5 fps 的根因是玻璃舱 transmission 材质）:
+- GlassChamber 新增帧率守卫：0.55s 时间窗口内平均帧率 < 24fps 自动降级为轻量玻璃，
+  舱下提示 4.5s；用户手动开启折射视为明确选择，仅 < 12fps 才兜底降级
+- 移除 update 中每帧 cell.traverse 改写 transparent 的开销
+- 区分 setParam 来源：main.js 的 apply() 增加 user 标记（面板回灌记忆参数为 false、
+  真实 UI 操作为 true），避免回灌把 forceRefract 锁死导致守卫失效
+- buildAtom 改用共享 geometry/material（原先每次点击新建最多 118 个球几何与材质），
+  仅环与文字 own=true 参与 dispose，场景 dispose 统一释放共享资源
+
+交互:
+- SceneManager 拾取判定 5px/500ms 放宽到 8px/800ms，慢速点击与轻微手抖不再被当成拖拽
+- 翻面动画增加中途放大 1.14 的反馈；tickFlips 改为只遍历活跃动画卡片
+
+回归: _flip_test.js 扩到 9 项（含真实鼠标点击翻面与性能守卫）全绿；
+单文件 2.02MB 隔离冒烟通过；新增 _perf_diag.js 分阶段 FPS 诊断工具

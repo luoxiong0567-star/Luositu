@@ -1,0 +1,35 @@
+输出: C:\Users\CMCC\WorkBuddy\2026-09-16-19-12-38\human-light\release\人类之光.html
+大小: 2.02 MB (2116183 字节)
+内联资源 29 个:
+      16.0 KB  css/main.css
+     359.0 KB  css/katex.css
+     593.8 KB  vendor/three.min.js
+     269.0 KB  vendor/katex.min.js
+       7.5 KB  js/core/OrbitControls.js
+      11.9 KB  js/core/SceneManager.js
+       7.9 KB  js/core/Tour.js
+       6.7 KB  js/data/elements.js
+     244.3 KB  js/data/thumbs.js
+      15.2 KB  js/scenes/solarSystem.js
+      59.3 KB  js/scenes/periodicTable.js
+      13.5 KB  js/scenes/neuralNetwork.js
+      11.3 KB  js/scenes/mathSurface.js
+      15.7 KB  js/scenes/interference.js
+      17.9 KB  js/scenes/molecular.js
+      12.4 KB  js/scenes/fourier.js
+      12.0 KB  js/scenes/emwave.js
+      70.0 KB  js/scenes/photosynthesis.js
+      80.3 KB  js/scenes/maxwell.js
+      73.4 KB  js/scenes/massenergy.js
+      26.1 KB  js/scenes/spacetime.js
+      25.9 KB  js/scenes/gravity/gravity.js
+      13.0 KB  js/scenes/gravity/g1_well.js
+      13.0 KB  js/scenes/gravity/g2_binary.js
+      16.0 KB  js/scenes/gravity/g3_kepler.js
+      20.1 KB  js/scenes/gravity/g4_three.js
+      19.2 KB  js/scenes/gravity/g5_tidal.js
+      15.1 KB  js/scenes/gravity/g6_escape.js
+      18.0 KB  js/main.js
+外部引用: 无（完全自包含）
+输出: C:\Users\CMCC\WorkBuddy\2026-09-16-19-12-38\human-light\release\人类之光-网页版.zip
+大小: 0.83 MB（30 个文件）

@@ -340,9 +340,11 @@
     });
   }
 
-  function apply(def, key, value) {
+  /* user=true 表示用户在界面上真实操作；初始化回灌记忆参数时 user 为 false，
+     场景据此区分「用户明确要求」与「默认值」，避免自动性能降级被误锁死 */
+  function apply(def, key, value, user) {
     if (manager.inst && manager.inst.setParam) {
-      try { manager.inst.setParam(key, value); } catch (e) { console.error(e); }
+      try { manager.inst.setParam(key, value, !!user); } catch (e) { console.error(e); }
     }
   }
 
@@ -359,7 +361,7 @@
       var v = parseFloat(input.value);
       st[c.key] = v;
       box.querySelector('.val').textContent = fmt(v) + (c.unit || '');
-      apply(def, c.key, v);
+      apply(def, c.key, v, true);
     });
     box.appendChild(input);
     return box;
@@ -374,7 +376,7 @@
     cb.checked = !!val;
     cb.addEventListener('change', function () {
       st[c.key] = cb.checked;
-      apply(def, c.key, cb.checked);
+      apply(def, c.key, cb.checked, true);
     });
     lab.appendChild(cb);
     lab.appendChild(document.createTextNode(c.label));
@@ -399,7 +401,7 @@
         Array.prototype.forEach.call(row.children, function (x) { x.classList.remove('on'); });
         b.classList.add('on');
         st[c.key] = o.value;
-        apply(def, c.key, o.value);
+        apply(def, c.key, o.value, true);
       });
       row.appendChild(b);
     });
@@ -414,7 +416,7 @@
     b.className = 'btn';
     b.style.width = '100%';
     b.textContent = c.label;
-    b.addEventListener('click', function () { apply(def, c.key, true); });
+    b.addEventListener('click', function () { apply(def, c.key, true, true); });
     box.appendChild(b);
     return box;
   }
