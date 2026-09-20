@@ -246,16 +246,29 @@
     });
   }
 
+  /* 侧栏收起/展开会改变画布尺寸，动画结束后同步一次渲染尺寸 */
+  var galResizeTimer = null;
+  function syncResize() {
+    if (galResizeTimer) clearTimeout(galResizeTimer);
+    galResizeTimer = setTimeout(function () {
+      try { if (manager && manager.resize) manager.resize(); } catch (e) { /* 忽略 */ }
+    }, 380);
+  }
+
   function showGallery() {
     if (!galleryEl) return;
     galleryEl.classList.add('show');
+    document.body.classList.add('gal-open');
     hideGuide();
+    syncResize();
     // 清掉 hash，刷新后仍停留在目录页
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* 个别环境受限 */ }
   }
 
   function hideGallery() {
     if (galleryEl) galleryEl.classList.remove('show');
+    document.body.classList.remove('gal-open');
+    syncResize();
     // 从目录进入场景后，再补弹引导（避免浮层叠在目录页上）
     if (pendingGuide) {
       var d = pendingGuide; pendingGuide = null;

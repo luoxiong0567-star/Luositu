@@ -33,6 +33,18 @@ html, body {
   display: flex;
   flex-direction: column;
   z-index: 10;
+  transition: width .34s ease, flex-basis .34s ease, opacity .24s ease, transform .34s ease;
+}
+/* 场景目录页（首页）展开时收起左侧栏：卡片区独占整幅画面 */
+body.gal-open #sidebar {
+  width: 0;
+  flex-basis: 0;
+  min-width: 0;
+  opacity: 0;
+  transform: translateX(-16px);
+  border-right-color: transparent;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .brand {
