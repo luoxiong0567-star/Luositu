@@ -1,8 +1,7 @@
-feat(solar): 太阳系讲解模式 + 讲解引擎框架化
+feat(core): HL.safeArea 画布安全区 + gravity HUD 一键折叠
 
-- 新增 web/js/core/Tour.js：HL.Tour 通用讲解引擎（暂停模拟/相机飞行/脉冲跟随光环/旁白卡片），任何场景提供 tour 步骤数组即可接入
-- solarSystem.js：新增 7 步太阳系导览（共面圆盘→太阳→内行星→地月系→木星土星→冰巨星→开普勒第三定律），脉冲支持跟随运动天体
-- gravity.js：从私有实现迁移到 HL.Tour（删除 4590 字符旧引擎），六子场景回归 6/6 PASS
-- main.css：#hlTour 通用样式；删除 #gravTour 专用规则
-- 验证：solar 讲解 6/6（web 版+单文件版）、gravity 讲解 6/6、物理读数无回归、单文件冒烟 10/10
+- SceneManager.js：HL.safeArea（calc/apply）——每帧检测左侧公式卡/右侧参数面板/顶部标题栏，camera.setViewOffset 平移视锥使 3D 主体落在可用区中心；值未变时零开销；目录页不偏移
+- gravity Hud：≪ 收起 / ≫ 公式卡 折叠把手（clear 保留把手，折叠状态跨子场景保持）
+- 坐标系坑：getBoundingClientRect 是视口坐标，需减 canvas rect 换算（页面左侧有 aside 侧栏）
+- 验证：safeArea 5/5（展开/折叠/再展开/solar/目录页，target 投影精确命中安全区中心）、gravity 物理读数 6/6、讲解 6/6、solar 讲解 6/6、单文件冒烟 10/10
 - 发布：release/人类之光.html 1.92 MB；README/分享说明同步

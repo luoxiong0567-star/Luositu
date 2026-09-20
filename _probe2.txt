@@ -1,0 +1,200 @@
+===== main loop =====
+/**
+ * 应用入口：场景列表、参数面板、悬浮提示、快捷键
+ */
+(function (global) {
+  'use strict';
+
+  var HL = global.HL;
+  var manager, canvas, stageEl, panelEl, tooltipEl;
+  var currentId = null;
+  var state = {};               // 每个场景的参数记忆
+  var urlApplied = {};          // URL 查询参数只注入一次
+
+  function init() {
+    canvas = document.getElementById('gl');
+    stageEl = document.getElementById('stage');
+    panelEl = document.getElementById('panel');
+    tooltipEl = document.getElementById('tooltip');
+
+    manager = new HL.Manager(canvas);
+    manager.onFps = function (f) {
+      document.getElementById('fps').textContent = f + ' FPS';
+    };
+
+    HL.tooltip = { show: showTooltip, hide: hideTooltip };
+    HL.toast = showToast;
+    HL.manager = manager;
+    // 供场景在子场景切换后重建参数面板 / 改写副标题
+    HL.rebuildPanel = rebuildPanel;
+    HL.setDesc = function (t) {
+      var el = document.getElementById('sceneDesc');
+      if (el
+===== init 尾部（找启动调用） =====
+    if (idx >= 0) {
+        var list = HL.allScenes();
+        if (list[idx]) load(list[idx].id);
+      }
+    });
+
+    // 点击空白处收起提示
+    canvas.addEventListener('pointerdown', function () { hideTooltip(); });
+
+    var hash = (location.hash || '').replace('#', '');
+    var list = HL.allScenes();
+    var direct = hash && HL.getScene(hash) ? hash : null;
+    // 先开目录再 load：目录页打开时引导浮层会延迟到关闭目录后补弹
+    if (!direct) showGallery();
+    load(direct || list[0].id);
+  }
+
+  /* ---------------- 侧栏 ---------------- */
+  function buildList() {
+    var wrap = document.getElementById('sceneList');
+    wrap.innerHTML = '';
+    HL.allScenes().forEach(function (def, i) {
+      var item = document.createElement('div');
+      item.className = 'scene-item';
+      item.dataset.id = def.id;
+      item.innerHTML =
+        '<div class="ico">' + def.icon + '</div>' +
+        '<div class="txt"><b>' + def.name + '</b><span>' + def.short + '</span></div>';
+      item.addEventListener('click', function () { load(def.id); });
+      wrap.appendChild(item);
+    });
+  }
+
+  function load(id) {
+    if (!id || id === currentId) {
+      if (id === currentId) manager.resetView();
+      return;
+    }
+    hideTooltip();
+    if
+===== Hud ctor =====
+      });
+        return;
+      } catch (e) { /* 落到纯文本 */ }
+    }
+    el.textContent = tex;
+  };
+
+  function Hud(stage) {
+    this.stage = stage;
+    this.root = document.createElement('div');
+    this.root.id = 'gravHud';
+    this.root.className = 'grav-hud';
+    stage.appendChild(this.root);
+    this.cards = [];
+  }
+
+  Hud.prototype.clear = function () {
+    this.root.innerHTML = '';
+    this.cards.length = 0;
+  };
+
+  /**
+   * def: { title, accent, badge, tex, note, rows:[[k,v,color]], plot:{w,h,draw(ctx,w,h)} }
+   */
+  Hud.prototype.card = function (def) {
+    var self = this;
+    var el = document.createElement('div');
+    el.className = 'gc-card';
+    var acc = def.accent || GRAV.CSS.cyan;
+
+    var head = document.createElement('div');
+    head.className = 'gc-head';
+    var bar = document.createElement('i');
+    bar.className = 'gc-bar';
+    bar.style.background = acc;
+    head.appendChild(bar);
+    var ttl = document.createElement('span');
+    ttl.className = 'gc-t';
+    ttl.textContent = def.title || '';
+    head.appendChild(ttl);
+    var badge = document.createElement('em');
+    badge.className = 'gc-badge';
+    badge.style.color = acc;
+    badge.style.borderColor = acc;
+    badge.textContent = def.badge || '';
+    badge.style.display = def.badge ? '' : 'none';
+    head.appendChild(badge);
+    el.appendChild(head);
+
+    var texEl = null, noteEl = null, rowsEl = null, plot = null;
+
+    if (def.tex) {
+      texEl = document.createElement('div');
+      texEl.className = 'gc-tex';
+      GRAV.katex(texEl, def.tex);
+      el.appendChild(texEl);
+    }
+    if (def.note) {
+      noteEl = document.createElement('div');
+      noteEl.className = 'gc-note';
+      noteEl.textC
+===== titlebar css =====
+ant-numeric: tabular-nums;
+}
+
+/* ---------- 舞台 ---------- */
+#stage { position: relative; flex: 1; height: 100%; overflow: hidden; }
+#gl { display: block; width: 100%; height: 100%; outline: none; }
+
+#titlebar {
+  position: absolute; top: 22px; left: 26px;
+  pointer-events: none; z-index: 4;
+}
+#titlebar h2 {
+  font-size: 22px; font-weight: 600; letter-spacing: 2px;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, .8);
+}
+#titlebar p {
+  margin-top: 6px; max-width: 460px;
+  font-size: 12px; line-height: 1.65; color: var(--muted);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .9);
+}
+
+/* ---------- 参数面板 ---------- */
+#panel {
+  position: absolute; top: 22px; right: 22px;
+  width: 226px; z-index: 5;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  backdrop-filter: blur(14px);
+  padding: 14px;
+  max-height: calc(100% - 110px);
+  overflow-y: auto;
+  display: none;
+}
+#panel
+===== panel css =====
+, .8);
+}
+#titlebar p {
+  margin-top: 6px; max-width: 460px;
+  font-size: 12px; line-height: 1.65; color: var(--muted);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .9);
+}
+
+/* ---------- 参数面板 ---------- */
+#panel {
+  position: absolute; top: 22px; right: 22px;
+  width: 226px; z-index: 5;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  backdrop-filter: blur(14px);
+  padding: 14px;
+  max-height: calc(100% - 110px);
+  overflow-y: auto;
+  display: none;
+}
+#panel.show { display: block; }
+#panel .panel-title {
+  font-size: 10px; letter-spacing: 2px; color: var(--accent);
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.ctl { mar

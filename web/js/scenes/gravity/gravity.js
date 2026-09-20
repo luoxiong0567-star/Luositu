@@ -466,10 +466,27 @@
     this.root.className = 'grav-hud';
     stage.appendChild(this.root);
     this.cards = [];
+    this.folded = false;
+    var self = this;
+    var fold = this.foldEl = document.createElement('div');
+    fold.className = 'gh-fold';
+    fold.textContent = '≪ 收起';
+    fold.title = '收起 / 展开公式卡片';
+    fold.addEventListener('click', function () { self.setFolded(!self.folded); });
+    this.root.appendChild(fold);
   }
 
+  Hud.prototype.setFolded = function (f) {
+    this.folded = !!f;
+    this.root.classList[this.folded ? 'add' : 'remove']('folded');
+    if (this.foldEl) this.foldEl.textContent = this.folded ? '≫ 公式卡' : '≪ 收起';
+  };
+
   Hud.prototype.clear = function () {
+    // 清掉卡片但保留折叠条
+    var keep = this.foldEl;
     this.root.innerHTML = '';
+    if (keep) this.root.appendChild(keep);
     this.cards.length = 0;
   };
 

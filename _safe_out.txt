@@ -1,0 +1,7 @@
+── 1 binary·展开   PASS  L/R/T=382,260,88 offset=-61,44 target屏幕x=570（安全区中心=570） y=290/H2=333.5 卡片=3
+── 2 HUD·折叠     PASS  folded=true L=115 target屏幕x=436（左移 134px）
+── 3 HUD·再展开   PASS  folded=false L=382
+── 4 solar·仅面板 PASS  L/R/T=0,260,108 target屏幕x=379（< W/2=509）
+── 5 目录页·不偏移 PASS  L/R=0/0 viewEnabled=false
+
+✅ safeArea + HUD 折叠 5/5 通过

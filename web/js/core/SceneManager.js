@@ -23,6 +23,63 @@
   function allScenes() { return order.map(function (id) { return scenes[id]; }); }
   function getScene(id) { return scenes[id]; }
 
+  /* ---------------- 画布安全区：视锥自动避让 HUD / 面板 ----------------
+   * 框架每帧检测被 UI 占用的屏幕区域（左侧公式卡、右侧参数面板、顶部标题栏），
+   * 用 camera.setViewOffset 平移视锥，使 3D 主体落在可用区域的视觉中心——
+   * 场景不再需要手工调相机避让 HUD。
+   * 目录页打开时不偏移；UI 显隐 / 折叠后下一帧自动生效。
+   * HL.safeArea.calc() 返回 {W,H,L,R,T}（像素），供场景取景参考。 */
+  var safeArea = (function () {
+    var MARGIN = 12;
+    var lastKey = '';
+
+    function calc() {
+      // 全部换算到 canvas 坐标系（页面左侧有侧栏，getBoundingClientRect 是视口坐标）
+      var cv = document.getElementById('gl');
+      if (!cv) return { W: window.innerWidth, H: window.innerHeight, L: 0, R: 0, T: 0 };
+      var cr = cv.getBoundingClientRect();
+      var W = cr.width, H = cr.height;
+      var L = 0, R = 0, T = 0;
+      var gal = document.getElementById('gallery');
+      if (gal && gal.classList.contains('show')) return { W: W, H: H, L: 0, R: 0, T: 0 };
+      var hud = document.getElementById('gravHud');
+      if (hud) {
+        var r = hud.getBoundingClientRect();
+        if (r.width > 40 && r.height > 24) L = r.right - cr.left + MARGIN;
+      }
+      var panel = document.getElementById('panel');
+      if (panel && panel.classList.contains('show')) {
+        var pr = panel.getBoundingClientRect();
+        if (pr.width > 40 && pr.height > 40) R = cr.right - pr.left + MARGIN;
+      }
+      var tb = document.getElementById('titlebar');
+      if (tb) {
+        var tr = tb.getBoundingClientRect();
+        if (tr.height > 10 && tr.width > 10) T = tr.bottom - cr.top + MARGIN;
+      }
+      return { W: W, H: H, L: L, R: R, T: T };
+    }
+
+    function apply(camera) {
+      if (!camera || !camera.setViewOffset) return;
+      var a = calc();
+      var key = [Math.round(a.W), Math.round(a.H), Math.round(a.L), Math.round(a.R), Math.round(a.T)].join(',');
+      if (key === lastKey) return;
+      lastKey = key;
+      if (a.L < 1 && a.R < 1 && a.T < 1) {
+        if (camera.view && camera.view.enabled) {
+          camera.clearViewOffset();
+          camera.updateProjectionMatrix();
+        }
+      } else {
+        // 子窗口与全屏同尺寸 → 等效平移视锥：内容左移 (R-L)/2、上移 T/2
+        camera.setViewOffset(a.W, a.H, (a.R - a.L) / 2, a.T / 2, a.W, a.H);
+      }
+    }
+
+    return { calc: calc, apply: apply };
+  })();
+
   /* ---------------- 资源回收 ---------------- */
   function disposeObject(root) {
     if (!root) return;
@@ -166,6 +223,8 @@
         }
       }
       if (this.controls) this.controls.update(dt);
+      // 视锥避让 HUD / 面板（值未变化时零开销）
+      safeArea.apply(this.camera);
       // 场景可自带后处理链：inst.render(renderer, scene, camera) 优先于默认渲染
       if (this.inst && this.inst.render) {
         try { this.inst.render(this.renderer, this.scene, this.camera); }
@@ -274,5 +333,6 @@
   global.HL.getScene = getScene;
   global.HL.Manager = Manager;
   global.HL.disposeObject = disposeObject;
+  global.HL.safeArea = safeArea;
 
 })(window);
