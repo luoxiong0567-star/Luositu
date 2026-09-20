@@ -1,0 +1,986 @@
+/**
+ * 场景：元素周期表（3D）
+ * 三种布局：经典周期表平面 / 原子序数螺旋 / 原子量地形
+ * 点击元素查看物性参数，并生成该原子的简化壳层示意模型
+ */
+HL.registerScene({
+  id: 'periodic',
+  name: '元素周期表',
+  short: '118 种元素 · 点击采样玻璃舱',
+  icon: '⚛',
+  fov: 48,
+  minDistance: 4,
+  maxDistance: 200,
+  desc: '118 种元素按周期与族排布，颜色区分类别。切换布局可观察原子序数的连续性与相对原子质量的增长趋势。点击任一元素查看细节，并在右侧玻璃样品舱中按真实熔点/沸点呈现气 / 液 / 固三态。',
+
+  controls: [
+    { type: 'buttons', key: 'mode', label: '布局方式', value: 'table', options: [
+      { label: '周期表', value: 'table' },
+      { label: '螺旋', value: 'spiral' },
+      { label: '质量地形', value: 'mass' }
+    ] },
+    { type: 'check', key: 'atom', label: '显示原子壳层模型', value: true },
+    { type: 'check', key: 'chamber', label: '点击元素 → 玻璃样品舱', value: true },
+    { type: 'range', key: 'logT', label: '样品舱温度 log₁₀(T / K)', min: 0.7, max: 3.8, step: 0.005, value: 2.474 },
+    { type: 'check', key: 'refract', label: '玻璃折射（关闭可提速）', value: true },
+    { type: 'check', key: 'autoRotate', label: '自动旋转', value: false },
+    { type: 'legend', items: [
+      ['碱金属', '#ff9a6b'], ['碱土金属', '#ffd76e'], ['过渡金属', '#6fc7ff'],
+      ['后过渡金属', '#74dcd0'], ['类金属', '#f2e17c'], ['非金属', '#7fe3a0'],
+      ['卤素', '#a8e05f'], ['稀有气体', '#b39dff'], ['镧系', '#ff9ec4'], ['锕系', '#ff7a9c']
+    ] }
+  ],
+
+  create: function (ctx) {
+    var THREE = ctx.THREE, scene = ctx.scene, camera = ctx.camera;
+    scene.add(ctx.makeStars(1800, 400));
+
+    var params = { mode: 'table', atom: true, autoRotate: false, chamber: true, logT: 2.474, refract: true };
+    var blocks = [];
+    var pickables = [];
+    var hovered = null;
+    var SHELL_MAX = [2, 8, 18, 32, 32, 18, 8];   // 简化壳层容量（示意）
+
+    var geo = new THREE.BoxGeometry(1.12, 1.12, 0.22);
+    var faceGeo = new THREE.PlaneGeometry(1.06, 1.06);
+
+    /* ---------- 占位块（镧系 / 锕系位置） ---------- */
+    function addPlaceholder(text, group, period) {
+      var x = (group - 1) * 1.25 - 10.6;
+      var y = 4.2 - (period - 1) * 1.35;
+      var m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        color: 0x1b2438, transparent: true, opacity: 0.55
+      }));
+      m.position.set(x, y, 0);
+      var lb = ctx.makeText(text, { size: 30, scale: 1.0, color: '#5d6b85' });
+      lb.position.set(0, 0, 0.14);
+      m.add(lb);
+      scene.add(m);
+      blocks.push({ mesh: m, target: new THREE.Vector3(x, y, 0), isPh: true });
+    }
+    addPlaceholder('57-71', 3, 6);
+    addPlaceholder('89-103', 3, 7);
+
+    /* ---------- 元素块 ---------- */
+    HL.ELEMENTS.forEach(function (e, idx) {
+      var Z = e[0], sym = e[1], zh = e[2], mass = e[3], cat = e[4], period = e[5], group = e[6];
+      var color = new THREE.Color(HL.ELEMENT_CATEGORIES[cat] || '#8899aa');
+
+      var mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        color: color, roughness: 0.42, metalness: 0.35,
+        emissive: color.clone().multiplyScalar(0.16)
+      }));
+
+      var face = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({
+        map: makeFace(e), transparent: true
+      }));
+      face.position.z = 0.12;
+      mesh.add(face);
+
+      var pos = layout(params.mode, Z, group, period, mass, idx);
+      mesh.position.copy(pos);
+      mesh.userData.el = e;
+      scene.add(mesh);
+      pickables.push(mesh);
+      blocks.push({ mesh: mesh, target: pos.clone(), base: color.clone(), Z: Z });
+    });
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    var d1 = new THREE.DirectionalLight(0xffffff, 1.0);
+    d1.position.set(6, 12, 18);
+    scene.add(d1);
+    var d2 = new THREE.DirectionalLight(0x6fa8ff, 0.5);
+    d2.position.set(-10, -6, -12);
+    scene.add(d2);
+
+    /* ---------- 原子壳层模型 ---------- */
+    var atomRoot = new THREE.Group();
+    atomRoot.position.set(13.4, -6.1, 0);
+    atomRoot.scale.setScalar(0.52);
+    scene.add(atomRoot);
+    var atomParts = [];
+
+    function buildAtom(Z) {
+      atomParts.forEach(function (o) { atomRoot.remove(o); HL.disposeObject(o); });
+      atomParts = [];
+
+      var rest = Z, shells = [];
+      for (var s = 0; s < SHELL_MAX.length && rest > 0; s++) {
+        var n = Math.min(rest, SHELL_MAX[s]);
+        shells.push(n); rest -= n;
+      }
+
+      var nucleus = new THREE.Mesh(
+        new THREE.SphereGeometry(0.42, 28, 20),
+        new THREE.MeshStandardMaterial({ color: 0xffcf6b, emissive: 0x8a5a00, roughness: 0.35 })
+      );
+      atomRoot.add(nucleus);
+      atomParts.push(nucleus);
+
+      var core = new THREE.Sprite(ctx.glowSprite('rgba(255,190,90,0.7)'));
+      core.scale.set(3, 3, 1);
+      atomRoot.add(core);
+      atomParts.push(core);
+
+      shells.forEach(function (count, li) {
+        var R = 0.95 + li * 0.62;
+        var ringGeo = new THREE.TorusGeometry(R, 0.018, 8, 90);
+        var ringMat = new THREE.MeshBasicMaterial({ color: 0x4de2ff, transparent: true, opacity: 0.4 });
+        var ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2 + (li % 2 ? 0.5 : -0.35);
+        ring.rotation.z = li * 0.6;
+        atomRoot.add(ring);
+        atomParts.push(ring);
+
+        var holder = new THREE.Group();
+        holder.rotation.copy(ring.rotation);
+        for (var k = 0; k < count; k++) {
+          var a = (k / count) * Math.PI * 2;
+          var eMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.085, 12, 8),
+            new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x1d5d7a, roughness: 0.3 })
+          );
+          eMesh.position.set(Math.cos(a) * R, Math.sin(a) * R, 0);
+          holder.add(eMesh);
+        }
+        atomRoot.add(holder);
+        atomParts.push(holder);
+      });
+
+      var lb = ctx.makeText('Z = ' + Z + '　壳层 ' + shells.join('·'), { size: 34, scale: 1.1, color: '#ffcf6b' });
+      lb.position.set(0, -2.6, 0);
+      atomRoot.add(lb);
+      atomParts.push(lb);
+
+      var note = ctx.makeText('玻尔简化壳层示意', { size: 26, scale: 0.9, color: '#6f7f9a' });
+      note.position.set(0, -3.1, 0);
+      atomRoot.add(note);
+      atomParts.push(note);
+    }
+    buildAtom(6);
+
+    /* ---------- 玻璃样品舱：点击元素后展现 ---------- */
+    var chamber = HL.GlassChamber(THREE);
+    chamber.group.position.set(13.1, 1.3, 0);
+    chamber.group.scale.setScalar(0.46);
+    chamber.group.visible = false;
+    scene.add(chamber.group);
+    chamber.setRefract(params.refract);
+    chamber.setTemperature(Math.pow(10, params.logT));
+
+    var chHint = ctx.makeText('点击任意元素 → 玻璃样品舱采样', { size: 30, scale: 1.0, color: '#6f7f9a' });
+    chHint.position.set(13.1, 1.3, 0);
+    scene.add(chHint);
+
+    // URL 直达：?chamber=1#periodic  直接以铁样品开局
+    if (location.search.indexOf('chamber') >= 0) {
+      chamber.setElement(HL.ELEMENTS[25]);
+      chamber.setVisible(true);
+      chHint.visible = false;
+    }
+
+    camera.position.set(1.9, 1.6, 30);
+    camera.lookAt(1.9, 0, 0);
+    ctx.controls.target.set(1.9, 0, 0);
+
+    if (location.search.indexOf('debug=1') >= 0) {
+      window.__PT = { chamber: chamber, camera: camera, THREE: THREE, atomRoot: atomRoot };
+    }
+
+    /* ---------- 交互 ---------- */
+    var ray = new THREE.Raycaster();
+
+    function onMove(e) {
+      if (!params.mode) return;
+      var r = ctx.canvas.getBoundingClientRect();
+      ray.setFromCamera({
+        x: ((e.clientX - r.left) / r.width) * 2 - 1,
+        y: -((e.clientY - r.top) / r.height) * 2 + 1
+      }, camera);
+      var hit = ray.intersectObjects(pickables, false);
+      var obj = hit.length ? hit[0].object : null;
+      if (obj !== hovered) {
+        if (hovered) hovered.material.emissive.copy(hovered.userData.baseEmissive || new THREE.Color(0x000000));
+        hovered = obj;
+        if (hovered) hovered.material.emissive = new THREE.Color(0x2f6f8f);
+      }
+      ctx.canvas.style.cursor = obj ? 'pointer' : 'default';
+    }
+    ctx.canvas.addEventListener('pointermove', onMove);
+
+    return {
+      update: function (dt, time) {
+        var k = 1 - Math.pow(0.001, dt);           // 与帧率无关的插值系数
+        blocks.forEach(function (b) {
+          b.mesh.position.lerp(b.target, k);
+        });
+        var spin = params.autoRotate ? 0.22 : 0.06;
+        atomRoot.rotation.y += dt * spin;
+        atomRoot.rotation.x += dt * spin * 0.25;
+        atomRoot.visible = params.atom;
+        ctx.controls.autoRotate = params.autoRotate && params.mode !== 'table';
+
+        chamber.update(dt, time || 0);
+        if (chHint.visible) chHint.material.opacity = 0.55 + 0.35 * Math.sin((time || 0) * 2.2);
+      },
+
+      setParam: function (key, v) {
+        params[key] = v;
+        if (key === 'logT') chamber.setTemperature(Math.pow(10, v));
+        if (key === 'refract') chamber.setRefract(v);
+        if (key === 'chamber' && !v) chamber.setVisible(false);
+        if (key === 'mode') {
+          blocks.forEach(function (b, i) {
+            if (b.isPh) {
+              var g = b === blocks[0] ? 3 : 3;
+              var pz = i === 0 ? 6 : 7;
+              b.target.set((g - 1) * 1.25 - 10.6, v === 'mass' ? 0.5 : 4.2 - (pz - 1) * 1.35, v === 'mass' ? 0 : 0);
+              if (v !== 'table') b.target.set(0, -60, 0);   // 非表格布局隐藏占位
+              return;
+            }
+            var e = b.mesh.userData.el;
+            b.target.copy(layout(v, e[0], e[6], e[5], e[3], i - 2));
+          });
+        }
+      },
+
+      onClick: function (ndc) {
+        ray.setFromCamera({ x: ndc.x, y: ndc.y }, camera);
+        var hit = ray.intersectObjects(pickables, false);
+        if (!hit.length) { HL.tooltip.hide(); return; }
+        var e = hit[0].object.userData.el;
+        var Z = e[0], sym = e[1], zh = e[2], mass = e[3], cat = e[4], period = e[5], group = e[6];
+
+        var name = zh || ('第 ' + Z + ' 号元素（人工合成）');
+        var html = '<div class="tt-title">' + (zh ? zh + ' · ' : '') + sym + '　' + Z + '</div>';
+        html += '<div class="tt-row">中文名：<b>' + name + '</b></div>';
+        html += '<div class="tt-row">相对原子质量：<b>' + mass + '</b></div>';
+        html += '<div class="tt-row">类别：<b style="color:' + (HL.ELEMENT_CATEGORIES[cat] || '#fff') + '">' + cat + '</b></div>';
+        html += '<div class="tt-row">位置：<b>第 ' + period + ' 周期' + (group ? '　第 ' + group + ' 族' : '　镧/锕系') + '</b></div>';
+        if (HL.SHELL_HINT[Z]) html += '<div class="tt-row">电子排布：<b>' + HL.SHELL_HINT[Z] + '</b></div>';
+        HL.tooltip.show(html, ndc.clientX, ndc.clientY);
+
+        if (params.atom) buildAtom(Z);
+        if (params.chamber) {
+          chamber.setElement(e);
+          chamber.setTemperature(Math.pow(10, params.logT));
+          chamber.setVisible(true);
+          chHint.visible = false;
+        }
+      },
+
+      dispose: function () {
+        ctx.canvas.removeEventListener('pointermove', onMove);
+        chamber.dispose();
+      }
+    };
+  }
+});
+
+/* ---------- 布局计算 ---------- */
+function layout(mode, Z, group, period, mass, idx) {
+  var x, y, z;
+  if (mode === 'spiral') {
+    var a = Z * 0.36;
+    x = Math.cos(a) * 7.4;
+    z = Math.sin(a) * 7.4;
+    y = -8.4 + Z * 0.148;
+  } else if (mode === 'mass') {
+    x = ((idx % 18)) * 1.25 - 10.6;
+    z = (Math.floor(idx / 18) - 3) * 1.55;
+    y = mass / 26 - 2.2;
+  } else {
+    x = (group - 1) * 1.25 - 10.6;
+    z = 0;
+    if (group === 0) {                                   // 镧系 / 锕系单独两行
+      var i = Z >= 89 ? Z - 89 : Z - 57;
+      x = i * 1.25 - 8.5;
+      y = Z >= 89 ? -7.0 : -5.6;
+      return new THREE.Vector3(x, y, 0);
+    }
+    y = 4.2 - (period - 1) * 1.35;
+  }
+  return new THREE.Vector3(x, y, z);
+}
+
+/* ---------- 元素块正面贴图 ---------- */
+function makeFace(e) {
+  var Z = e[0], sym = e[1], zh = e[2], mass = e[3], cat = e[4];
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = 160;
+  var c = cv.getContext('2d');
+  var col = HL.ELEMENT_CATEGORIES[cat] || '#8899aa';
+
+  c.fillStyle = 'rgba(6,10,20,0.82)';
+  c.fillRect(0, 0, 160, 160);
+  c.strokeStyle = col;
+  c.lineWidth = 4;
+  c.strokeRect(2, 2, 156, 156);
+
+  c.fillStyle = 'rgba(255,255,255,0.55)';
+  c.font = '500 24px "Microsoft YaHei", sans-serif';
+  c.textAlign = 'left';
+  c.fillText(String(Z), 11, 32);
+
+  c.fillStyle = col;
+  c.font = '700 62px "Segoe UI", "Microsoft YaHei", sans-serif';
+  c.textAlign = 'center';
+  c.fillText(sym, 80, 92);
+
+  c.fillStyle = 'rgba(230,240,255,0.9)';
+  c.font = '400 24px "Microsoft YaHei", sans-serif';
+  c.fillText(zh || '—', 80, 132);
+
+  c.fillStyle = 'rgba(255,255,255,0.4)';
+  c.font = '400 17px "Segoe UI", sans-serif';
+  c.fillText(String(mass), 80, 152);
+
+  var tex = new THREE.CanvasTexture(cv);
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+/* ==========================================================================
+   玻璃样品舱模块（第一版周期表点击元素后展现）
+   --------------------------------------------------------------------------
+   用法：
+     var ch = HL.GlassChamber(THREE);
+     scene.add(ch.group);
+     ch.group.position.set(14.6, 1.6, 0); ch.group.scale.setScalar(0.6);
+     ch.setElement(e);          // e = HL.ELEMENTS[i]
+     ch.setTemperature(298);    // K
+     ch.setVisible(true);       // 带缩放动画
+     ch.update(dt, time);
+   ========================================================================== */
+var GC_THERMO = [
+    ['g', 13.99, 20.27, '火箭燃料·合成氨·石油加氢', 'hcp'],
+    ['g', 0.95, 4.22, '超导磁体冷却·气球·检漏', 'hcp'],
+    ['s', 453.65, 1615, '锂电池正极·陶瓷·情绪稳定剂', 'bcc'],
+    ['s', 1560, 2742, 'X 射线窗口·航天构件·铍铜合金', 'hcp'],
+    ['s', 2349, 4200, '玻璃纤维·硼砂洗涤剂·半导体掺杂', 'dia'],
+    ['s', 3823, 4098, '有机分子骨架·石墨电极·碳纤维', 'dia'],
+    ['g', 63.15, 77.36, '合成氨·液氮冷冻·保护气', 'dia'],
+    ['g', 54.36, 90.20, '炼钢·医疗供氧·火箭氧化剂', 'dia'],
+    ['g', 53.53, 85.03, '特氟龙·六氟化铀·含氟药物', 'dia'],
+    ['g', 24.56, 27.07, '霓虹灯·激光·低温制冷剂', 'fcc'],
+    ['s', 370.94, 1156, '钠灯·金属还原剂·食盐化工', 'bcc'],
+    ['s', 923, 1363, '轻合金·闪光灯·抗酸药', 'hcp'],
+    ['s', 933.47, 2792, '航空铝材·包装箔·输电导线', 'fcc'],
+    ['s', 1687, 3538, '半导体芯片·光伏·有机硅', 'dia'],
+    ['s', 317.3, 553.7, '磷肥·阻燃剂·火柴', 'dia'],
+    ['s', 388.36, 717.8, '硫酸·橡胶硫化·杀菌剂', 'dia'],
+    ['g', 171.6, 239.11, '消毒漂白·PVC·盐酸', 'dia'],
+    ['g', 83.81, 87.30, '焊接保护气·冶金·灯泡填充', 'fcc'],
+    ['s', 336.53, 1032, '钾肥·玻璃·钠钾合金冷却剂', 'bcc'],
+    ['s', 1115, 1757, '水泥石灰·炼钢脱氧·补钙', 'fcc'],
+    ['s', 1814, 3109, '铝钪合金·高强度灯·航空航天', 'hcp'],
+    ['s', 1941, 3560, '钛合金·人工关节·钛白颜料', 'hcp'],
+    ['s', 2183, 3680, '高强度钢添加剂·钒液流电池', 'bcc'],
+    ['s', 2180, 2944, '不锈钢·镀铬·颜料', 'bcc'],
+    ['s', 1519, 2334, '锰钢·干电池·铝合金', 'bcc'],
+    ['s', 1811, 3134, '钢铁工业核心·电机铁芯·血红蛋白', 'bcc'],
+    ['s', 1768, 3200, '硬质合金·锂电池正极·蓝色颜料', 'hcp'],
+    ['s', 1728, 3186, '不锈钢·充电电池·电镀', 'fcc'],
+    ['s', 1357.77, 2835, '电线电缆·电机绕组·换热器', 'fcc'],
+    ['s', 692.68, 1180, '镀锌防腐·黄铜·锌空气电池', 'hcp'],
+    ['s', 302.91, 2673, '氮化镓 LED 与快充·半导体', 'dia'],
+    ['s', 1211.40, 3106, '红外光学·光纤掺杂·半导体', 'dia'],
+    ['s', 1090, 887, '砷化镓半导体·农药·合金硬化', 'dia'],
+    ['s', 494, 958, '硒鼓光敏材料·光伏·微量元素', 'dia'],
+    ['l', 265.8, 332.0, '阻燃剂·感光胶片·医药中间体', 'dia'],
+    ['g', 115.79, 119.93, '高功率灯·激光·绝缘气体', 'fcc'],
+    ['s', 312.46, 961, '原子钟·光电管·焰火', 'bcc'],
+    ['s', 1050, 1655, '焰火红色·夜光材料·铁氧体', 'fcc'],
+    ['s', 1799, 3609, 'YAG 激光·白光 LED 荧光粉·超导', 'hcp'],
+    ['s', 2128, 4682, '核燃料包壳·陶瓷刀具·立方氧化锆', 'hcp'],
+    ['s', 2750, 5017, '超导磁体 NbTi·铌钢·电容器', 'bcc'],
+    ['s', 2896, 4912, '高温合金·二硫化钼润滑·催化剂', 'bcc'],
+    ['s', 2430, 4538, '核医学显像锝-99m', 'hcp'],
+    ['s', 2607, 4423, '催化剂·电子触点·耐磨涂层', 'hcp'],
+    ['s', 2237, 3968, '汽车三元催化·铂铑热电偶', 'fcc'],
+    ['s', 1828.05, 3236, '催化转换器·储氢·电子元件', 'fcc'],
+    ['s', 1234.93, 2435, '导电银浆·感光材料·抗菌', 'fcc'],
+    ['s', 594.22, 1040, '镍镉电池·颜料·反应堆控制棒', 'hcp'],
+    ['s', 429.75, 2345, 'ITO 透明导电膜·低熔合金', 'fcc'],
+    ['s', 505.08, 2875, '焊料·马口铁·青铜', 'dia'],
+    ['s', 903.78, 1860, '阻燃协效剂·铅酸电池·半导体掺杂', 'dia'],
+    ['s', 722.66, 1261, '碲化镉薄膜电池·热电材料', 'hcp'],
+    ['s', 386.85, 457.4, '碘伏消毒·食盐加碘·造影剂', 'dia'],
+    ['g', 161.4, 165.03, '闪光灯·麻醉剂·离子推进器', 'fcc'],
+    ['s', 301.59, 944, '原子钟基准·光电阴极·钻井液', 'bcc'],
+    ['s', 1000, 2170, '钻井加重剂·钡餐造影·焰火绿', 'bcc'],
+    ['s', 1193, 3737, '镍氢电池·石油裂化催化·光学玻璃', 'hcp'],
+    ['s', 1068, 3716, '抛光粉·汽车尾气催化·打火石', 'fcc'],
+    ['s', 1208, 3793, '强磁体·电焊护目镜·玻璃着色', 'hcp'],
+    ['s', 1297, 3347, '钕铁硼强磁·激光·玻璃着色', 'hcp'],
+    ['s', 1315, 3273, '核电池·测厚仪·发光涂料', 'hcp'],
+    ['s', 1345, 2173, '钐钴磁体·中子吸收·抗癌药', 'hcp'],
+    ['s', 1099, 1802, '红色荧光粉·防伪油墨', 'bcc'],
+    ['s', 1585, 3546, 'MRI 造影剂·磁制冷·中子吸收', 'hcp'],
+    ['s', 1629, 3503, '绿色荧光粉·磁光存储·传感器', 'hcp'],
+    ['s', 1680, 2840, '高性能磁体添加剂·磁致伸缩', 'hcp'],
+    ['s', 1734, 2993, '钬激光碎石·光纤·磁体', 'hcp'],
+    ['s', 1802, 3141, '光纤放大器 EDFA·激光·粉色玻璃', 'hcp'],
+    ['s', 1818, 2223, '便携 X 射线源·激光·高温超导', 'hcp'],
+    ['s', 1097, 1469, '光纤激光·原子钟·应力传感', 'fcc'],
+    ['s', 1925, 3675, 'PET 探测器 LSO·催化裂化', 'hcp'],
+    ['s', 2506, 4876, '核控制棒·高 k 栅介质·等离子切割', 'hcp'],
+    ['s', 3290, 5731, '电容器·外科植入物·硬质合金', 'bcc'],
+    ['s', 3695, 6203, '灯丝·硬质合金·穿甲弹·电极', 'bcc'],
+    ['s', 3459, 5869, '喷气发动机叶片超合金·催化剂', 'hcp'],
+    ['s', 3306, 5285, '耐磨触点·电镜染色·超硬合金', 'hcp'],
+    ['s', 2719, 4701, '火花塞电极·坩埚·电解阳极', 'fcc'],
+    ['s', 2041.4, 4098, '三元催化·顺铂抗癌药·坩埚电极', 'fcc'],
+    ['s', 1337.33, 3129, '货币储备·键合引线·航天镀层', 'fcc'],
+    ['l', 234.32, 629.88, '温度计·荧光灯·氯碱电解（已限用）', 'fcc'],
+    ['s', 577, 1746, '红外探测器·心脏显像（已限用）', 'hcp'],
+    ['s', 600.61, 2022, '铅酸电池·辐射屏蔽·焊料（受限）', 'fcc'],
+    ['s', 544.7, 1837, '无铅焊料·胃药·易熔合金', 'hcp'],
+    ['s', 527, 1235, '静电消除·同位素热源（放射性）', 'fcc'],
+    ['s', 575, 610, '靶向 α 治疗研究（放射性）', 'fcc'],
+    ['g', 202, 211.5, '放射治疗史·室内氡监测对象', 'fcc'],
+    ['s', 300, 950, '核结构研究（极不稳定）', 'bcc'],
+    ['s', 973, 2010, '历史放疗·夜光涂料（已弃用）', 'bcc'],
+    ['s', 1323, 3471, '中子源·癌症治疗研究', 'fcc'],
+    ['s', 2115, 5061, '钍基核燃料·钨极焊接·光学透镜', 'fcc'],
+    ['s', 1841, 4300, '地质年代测定镤-231', 'fcc'],
+    ['s', 1405.3, 4404, '核电燃料·舰艇核动力·贫铀装甲', 'bcc'],
+    ['s', 917, 4273, '中子探测·核燃料循环研究', 'bcc'],
+    ['s', 912.5, 3501, '核武器与 MOX 燃料·同位素电源', 'fcc'],
+    ['s', 1449, 2880, '烟雾探测器镅-241·测厚仪', 'hcp'],
+    ['s', 1613, 3383, '火星车 α/X 射线谱仪电源', 'hcp'],
+    ['s', 1259, 2900, '超铀元素化学研究', 'fcc'],
+    ['s', 1173, 1743, '中子源锎-252·探矿·反应堆启动', 'fcc'],
+    ['s', 1133, 1269, '重元素化学研究', 'fcc'],
+    ['s', 1800, null, '重元素化学研究', 'fcc'],
+    ['s', 1100, null, '以门捷列夫命名的合成元素', 'fcc'],
+    ['s', 1100, null, '以诺贝尔命名的合成元素', 'fcc'],
+    ['s', 1900, null, '以回旋加速器命名的合成元素', 'fcc'],
+    ['s', 2400, 5800, '超重元素研究（预测值）', 'fcc'],
+    ['s', null, null, '超重元素研究（预测值）', 'fcc'],
+    ['s', null, null, '超重元素研究（预测值）', 'fcc'],
+    ['s', null, null, '超重元素研究（预测值）', 'fcc'],
+    ['s', null, null, '超重元素研究（预测值）', 'fcc'],
+    ['s', null, null, '超重元素研究（预测值）', 'fcc'],
+    ['s', null, null, '超重元素研究（预测值）', 'fcc'],
+    ['s', null, null, '超重元素研究（预测值）', 'fcc'],
+    ['l', 283, 340, '超重元素研究（预测值）', 'fcc'],
+    ['s', 700, 1430, '超重元素研究（预测值）', 'fcc'],
+    ['s', 200, 380, '超重元素研究（预测值）', 'fcc'],
+    ['s', 700, 1400, '超重元素研究（预测值）', 'fcc'],
+    ['s', 709, 1085, '超重元素研究（预测值）', 'fcc'],
+    ['s', 723, 883, '超重元素研究（预测值）', 'fcc'],
+    ['g', 258, 263, '超重元素研究（预测值）', 'fcc']
+  ];
+
+(function () {
+  'use strict';
+
+  var TH = GC_THERMO;                     // 118 × [常温物态, 熔点K, 沸点K, 用途, 晶格]
+
+  var LATTICE = {
+    fcc: { name: '面心立方 FCC', nn: 0.72, basis: [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]] },
+    bcc: { name: '体心立方 BCC', nn: 0.92, basis: [[0, 0, 0], [0.5, 0.5, 0.5]] },
+    hcp: { name: '密排六方 HCP', nn: 1.02, basis: [[0, 0, 0], [0.5, 0.5, 0], [1 / 3, 2 / 3, 0.5], [5 / 6, 5 / 6, 0.5]] },
+    dia: {
+      name: '金刚石结构', nn: 0.47,
+      basis: [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5],
+      [0.25, 0.25, 0.25], [0.75, 0.75, 0.25], [0.75, 0.25, 0.75], [0.25, 0.75, 0.75]]
+    }
+  };
+
+  var PHASE = {
+    solid: { hex: 0x9fd8ff, css: '#9fd8ff', label: '固态 SOLID' },
+    liquid: { hex: 0xff9a5c, css: '#ff9a5c', label: '液态 LIQUID' },
+    gas: { hex: 0xa8f0ff, css: '#a8f0ff', label: '气态 GAS' }
+  };
+
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function ss(e0, e1, x) { var t = (x - e0) / (e1 - e0); t = t < 0 ? 0 : (t > 1 ? 1 : t); return t * t * (3 - 2 * t); }
+
+  /* ---------- 通用小工具 ---------- */
+  function dotTexture(THREE) {
+    var cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    var c = cv.getContext('2d');
+    var g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function Segments(THREE, parent, max, opt) {
+    opt = opt || {};
+    var pos = new Float32Array(max * 6), col = new Float32Array(max * 6);
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    var mat = new THREE.LineBasicMaterial({
+      vertexColors: true, transparent: true,
+      opacity: opt.opacity === undefined ? 0.8 : opt.opacity,
+      depthWrite: false,
+      blending: opt.additive === false ? THREE.NormalBlending : THREE.AdditiveBlending
+    });
+    var obj = new THREE.LineSegments(geo, mat);
+    obj.frustumCulled = false; parent.add(obj);
+    var _c = new THREE.Color();
+    return {
+      obj: obj,
+      set: function (i, x1, y1, z1, x2, y2, z2, cA, cB) {
+        var o = i * 6;
+        pos[o] = x1; pos[o + 1] = y1; pos[o + 2] = z1;
+        pos[o + 3] = x2; pos[o + 4] = y2; pos[o + 5] = z2;
+        _c.setHex(cA); col[o] = _c.r; col[o + 1] = _c.g; col[o + 2] = _c.b;
+        _c.setHex(cB === undefined ? cA : cB);
+        col[o + 3] = _c.r; col[o + 4] = _c.g; col[o + 5] = _c.b;
+      },
+      count: function (n) { geo.setDrawRange(0, n * 2); },
+      flush: function () { geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; }
+    };
+  }
+
+  function Cloud(THREE, parent, n, size, tex, opt) {
+    opt = opt || {};
+    var pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    var mat = new THREE.PointsMaterial({
+      size: size, map: tex, vertexColors: true, transparent: true,
+      opacity: opt.opacity === undefined ? 0.9 : opt.opacity,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    });
+    var obj = new THREE.Points(geo, mat);
+    obj.frustumCulled = false; parent.add(obj);
+    var _c = new THREE.Color();
+    return {
+      obj: obj, mat: mat,
+      set: function (i, x, y, z, c) {
+        pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+        _c.setHex(c); col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b;
+      },
+      flush: function () { geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; }
+    };
+  }
+
+  function wireOf(THREE, geo, color, opacity) {
+    return new THREE.LineSegments(
+      new THREE.WireframeGeometry(geo),
+      new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: opacity, depthWrite: false })
+    );
+  }
+
+  /* 可动态改文字的霓虹标签 */
+  function Label(THREE, parent, scale, opt) {
+    opt = opt || {};
+    var W = 900, H = 180;
+    var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var c = cv.getContext('2d');
+    var tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, depthTest: false, depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: opt.opacity === undefined ? 1 : opt.opacity
+    }));
+    sp.scale.set(4.6 * scale, 0.92 * scale, 1);
+    sp.renderOrder = 998; parent.add(sp);
+    return {
+      sprite: sp,
+      set: function (text, color, size) {
+        c.clearRect(0, 0, W, H);
+        c.font = '700 ' + (size || 92) + 'px "Microsoft YaHei","Segoe UI",sans-serif';
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.shadowColor = color; c.shadowBlur = 30;
+        c.fillStyle = color; c.fillText(text, W / 2, H / 2);
+        c.shadowBlur = 8; c.globalAlpha = 0.6; c.fillStyle = '#ffffff';
+        c.fillText(text, W / 2, H / 2); c.globalAlpha = 1;
+        tex.needsUpdate = true;
+      }
+    };
+  }
+
+  /* ======================================================================
+     主体
+     ====================================================================== */
+  HL.GlassChamber = function (THREE) {
+    var S = 7.4, half = S / 2, R_IN = half - 0.45;
+
+    var root = new THREE.Group();
+    var cell = new THREE.Group(); root.add(cell);
+
+    var dotTex = dotTexture(THREE);
+
+    /* ---------- 玻璃舱体 ---------- */
+    var boxGeo = new THREE.BoxGeometry(S, S, S);
+    var matRefract = new THREE.MeshPhysicalMaterial({
+      color: 0xd6f0ff, metalness: 0, roughness: 0.05,
+      transmission: 0.95, thickness: 2.2, ior: 1.48,
+      transparent: true, side: THREE.DoubleSide,
+      clearcoat: 1, clearcoatRoughness: 0.04, depthWrite: false
+    });
+    var matPlain = new THREE.MeshBasicMaterial({
+      color: 0x8fd8ff, transparent: true, opacity: 0.07,
+      side: THREE.DoubleSide, depthWrite: false
+    });
+    var shell = new THREE.Mesh(boxGeo, matRefract);
+    shell.renderOrder = 20; cell.add(shell);
+
+    var edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(boxGeo),
+      new THREE.LineBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.9 })
+    );
+    edges.renderOrder = 30; cell.add(edges);
+
+    var corner = Segments(THREE, cell, 24, { opacity: 0.95 });
+    (function () {
+      var k = 0, L = 0.66;
+      for (var sx = -1; sx <= 1; sx += 2)
+        for (var sy = -1; sy <= 1; sy += 2)
+          for (var sz = -1; sz <= 1; sz += 2) {
+            var x = sx * half, y = sy * half, z = sz * half;
+            corner.set(k++, x, y, z, x - sx * L, y, z, 0xeaf2ff, 0x6fe3ff);
+            corner.set(k++, x, y, z, x, y - sy * L, z, 0xeaf2ff, 0x6fe3ff);
+            corner.set(k++, x, y, z, x, y, z - sz * L, 0xeaf2ff, 0x6fe3ff);
+          }
+      corner.count(k); corner.flush();
+    })();
+
+    /* 底座 */
+    var base = new THREE.Group(); base.position.y = -half - 0.62; cell.add(base);
+    base.add(new THREE.Mesh(
+      new THREE.CylinderGeometry(3.5, 3.9, 0.42, 64),
+      new THREE.MeshBasicMaterial({ color: 0x0c1826, transparent: true, opacity: 0.9 })
+    ));
+    base.add(wireOf(THREE, new THREE.CylinderGeometry(3.5, 3.9, 0.42, 64), 0x6fe3ff, 0.45));
+    var baseRing = new THREE.Mesh(
+      new THREE.TorusGeometry(3.72, 0.05, 8, 96),
+      new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: 0.9 })
+    );
+    baseRing.rotation.x = Math.PI / 2; baseRing.position.y = 0.24; base.add(baseRing);
+
+    /* 体积光锥 */
+    var volMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0x8fe6ff) } },
+      vertexShader: [
+        'varying vec2 vUv; varying vec3 vN; varying vec3 vV;',
+        'void main(){',
+        '  vUv = uv;',
+        '  vec4 wp = modelMatrix * vec4(position,1.0);',
+        '  vN = normalize(mat3(modelMatrix) * normal);',
+        '  vV = normalize(cameraPosition - wp.xyz);',
+        '  gl_Position = projectionMatrix * viewMatrix * wp;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform float uTime; uniform vec3 uColor;',
+        'varying vec2 vUv; varying vec3 vN; varying vec3 vV;',
+        'void main(){',
+        '  float top = smoothstep(0.0, 0.55, vUv.y);',
+        '  float bot = 1.0 - smoothstep(0.55, 1.0, vUv.y) * 0.72;',
+        '  float edge = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 1.6);',
+        '  float band = 0.78 + 0.22 * sin(vUv.x * 34.0 + uTime * 0.6);',
+        '  float a = (0.10 + edge * 0.30) * top * bot * band;',
+        '  gl_FragColor = vec4(uColor, a);',
+        '}'
+      ].join('\n')
+    });
+    var vol = new THREE.Mesh(new THREE.ConeGeometry(3.3, 9.0, 48, 1, true), volMat);
+    vol.position.y = half + 4.4; vol.renderOrder = 8; cell.add(vol);
+
+    var lampRing = new THREE.Mesh(
+      new THREE.TorusGeometry(1.35, 0.07, 8, 48),
+      new THREE.MeshBasicMaterial({ color: 0xcaf2ff, transparent: true, opacity: 0.9 })
+    );
+    lampRing.rotation.x = Math.PI / 2; lampRing.position.y = half + 8.8; cell.add(lampRing);
+
+    /* ---------- 边缘标注 ---------- */
+    var lbSym = Label(THREE, cell, 1.5, {});
+    lbSym.sprite.position.set(0, half + 1.5, 0);
+    var lbName = Label(THREE, cell, 0.86, {});
+    lbName.sprite.position.set(0, -half - 1.25, 0);
+    var lbInfo = Label(THREE, cell, 0.6, {});
+    lbInfo.sprite.position.set(0, -half - 2.25, 0);
+
+    /* ==================================================================
+       内部样品：气 / 液 / 固
+       ================================================================== */
+    var sample = new THREE.Group(); cell.add(sample);
+
+    /* --- 气态 --- */
+    var Gas = new THREE.Group(); sample.add(Gas);
+    var NG = 420;
+    var gas = Cloud(THREE, Gas, NG, 0.22, dotTex, { opacity: 0.95 });
+    var gx = new Float32Array(NG), gy = new Float32Array(NG), gz = new Float32Array(NG);
+    var gvx = new Float32Array(NG), gvy = new Float32Array(NG), gvz = new Float32Array(NG);
+    for (var i = 0; i < NG; i++) {
+      gx[i] = (Math.random() * 2 - 1) * R_IN; gy[i] = (Math.random() * 2 - 1) * R_IN; gz[i] = (Math.random() * 2 - 1) * R_IN;
+      gvx[i] = Math.random() * 2 - 1; gvy[i] = Math.random() * 2 - 1; gvz[i] = Math.random() * 2 - 1;
+    }
+
+    /* --- 液态 --- */
+    var Liq = new THREE.Group(); sample.add(Liq);
+    var liqMat = new THREE.ShaderMaterial({
+      transparent: true, side: THREE.DoubleSide, depthWrite: false,
+      uniforms: {
+        uTime: { value: 0 }, uAmp: { value: 0.16 },
+        uA: { value: new THREE.Color(0x4a1a10) },
+        uB: { value: new THREE.Color(0xd0762f) },
+        uGlow: { value: new THREE.Color(0xffb066) }
+      },
+      vertexShader: [
+        'uniform float uTime; uniform float uAmp;',
+        'varying float vH; varying vec2 vUv;',
+        'void main(){',
+        '  vUv = uv; vec3 p = position;',
+        '  float w = sin(p.x*2.1 + uTime*1.7)*0.5 + sin(p.y*2.7 - uTime*1.25)*0.4',
+        '           + sin((p.x+p.y)*1.35 + uTime*2.05)*0.32 + sin((p.x-p.y)*3.1 - uTime*2.6)*0.18;',
+        '  p.z += w * uAmp; vH = w;',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0);',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uA; uniform vec3 uB; uniform vec3 uGlow;',
+        'varying float vH; varying vec2 vUv;',
+        'void main(){',
+        '  float k = clamp(vH*0.5+0.5, 0.0, 1.0);',
+        '  vec3 col = mix(uA, uB, k);',
+        '  col += uGlow * pow(k, 9.0) * 0.9;',
+        '  float rim = smoothstep(0.40, 0.50, abs(vUv.x-0.5));',
+        '  col = mix(col, uGlow*0.55, rim*0.45);',
+        '  gl_FragColor = vec4(col, 0.94);',
+        '}'
+      ].join('\n')
+    });
+    var liqTop = new THREE.Mesh(new THREE.PlaneGeometry(R_IN * 2, R_IN * 2, 72, 72), liqMat);
+    liqTop.rotation.x = -Math.PI / 2; liqTop.renderOrder = 12; Liq.add(liqTop);
+    var liqH = R_IN * 0.88;
+    var liqBodyGeo = new THREE.BoxGeometry(R_IN * 2, liqH, R_IN * 2);
+    var liqBody = new THREE.Mesh(liqBodyGeo, new THREE.MeshBasicMaterial({
+      color: 0x8c3a18, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide
+    }));
+    liqBody.renderOrder = 11; Liq.add(liqBody);
+    var liqEdge = wireOf(THREE, liqBodyGeo, 0xff9a5c, 0.3); Liq.add(liqEdge);
+    liqTop.position.y = -R_IN + liqH;
+    liqBody.position.y = -R_IN + liqH / 2;
+    liqEdge.position.copy(liqBody.position);
+
+    var NB = 60;
+    var bub = Cloud(THREE, Liq, NB, 0.15, dotTex, { opacity: 0.8 });
+    var bx = new Float32Array(NB), by = new Float32Array(NB), bz = new Float32Array(NB), bs = new Float32Array(NB);
+    for (i = 0; i < NB; i++) {
+      bx[i] = (Math.random() * 2 - 1) * R_IN * 0.9;
+      bz[i] = (Math.random() * 2 - 1) * R_IN * 0.9;
+      by[i] = -R_IN + Math.random() * liqH;
+      bs[i] = 0.4 + Math.random() * 0.9;
+    }
+
+    /* --- 固态 --- */
+    var Sol = new THREE.Group(); sample.add(Sol);
+    var MAXAT = 72, MAXBOND = 320;
+    var atomMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff });
+    var atoms = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 18, 12), atomMat, MAXAT);
+    atoms.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    atoms.frustumCulled = false; atoms.count = 0; Sol.add(atoms);
+    var haloMat = new THREE.MeshBasicMaterial({
+      color: 0x9fd8ff, transparent: true, opacity: 0.16,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    var halos = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10), haloMat, MAXAT);
+    halos.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    halos.frustumCulled = false; halos.count = 0; halos.renderOrder = 4; Sol.add(halos);
+    var bonds = Segments(THREE, Sol, MAXBOND, { opacity: 0.8 });
+    var cellBox = wireOf(THREE, new THREE.BoxGeometry(1, 1, 1), 0x9fb3c8, 0.3);
+    Sol.add(cellBox);
+
+    var latPts = [], latBonds = [], latA = 1;
+    var _m4 = new THREE.Matrix4(), _v3 = new THREE.Vector3(), _s3 = new THREE.Vector3();
+    var _q0 = new THREE.Quaternion();
+
+    function buildLattice(kind) {
+      var L = LATTICE[kind] || LATTICE.fcc;
+      var N = 2;
+      var a = (R_IN * 1.74) / N;
+      var pts = [];
+      for (var i = 0; i < N; i++)
+        for (var j = 0; j < N; j++)
+          for (var k = 0; k < N; k++)
+            for (var b = 0; b < L.basis.length; b++) {
+              if (kind === 'hcp' && b >= 2 && k === N - 1) continue;
+              var bs = L.basis[b];
+              pts.push([(i + bs[0] - N / 2) * a, (j + bs[1] - N / 2) * a, (k + bs[2] - N / 2) * a]);
+            }
+      var uniq = [];
+      for (i = 0; i < pts.length; i++) {
+        var dup = false;
+        for (j = 0; j < uniq.length; j++) {
+          var dx = pts[i][0] - uniq[j][0], dy = pts[i][1] - uniq[j][1], dz = pts[i][2] - uniq[j][2];
+          if (dx * dx + dy * dy + dz * dz < a * a * 0.01) { dup = true; break; }
+        }
+        if (!dup && uniq.length < MAXAT) uniq.push(pts[i]);
+      }
+      var bd = [];
+      var lim = a * L.nn * 1.06;
+      for (i = 0; i < uniq.length && bd.length < MAXBOND; i++)
+        for (j = i + 1; j < uniq.length && bd.length < MAXBOND; j++) {
+          var d2 = 0, t;
+          for (k = 0; k < 3; k++) { t = uniq[i][k] - uniq[j][k]; d2 += t * t; }
+          if (d2 < lim * lim) bd.push([i, j]);
+        }
+      latPts = uniq; latBonds = bd; latA = a;
+      cellBox.scale.set(a * N, a * N, a * N);
+      cellBox.visible = true;
+    }
+
+    /* ==================================================================
+       状态
+       ================================================================== */
+    var st = {
+      el: null, Tk: 298, vis: false, k: 0,
+      wS: 1, wL: 0, wG: 0, lat: 'fcc', Tm: 1000, Tb: 5000, color: 0x6fe3ff
+    };
+
+    function setElement(e) {
+      st.el = e;
+      var Z = e[0];
+      var d = TH[Z - 1] || ['s', 1000, 5000, '', 'fcc'];
+      st.Tm = d[1] || 1000; st.Tb = d[2] || 1e6;
+      var lat = d[4] || 'fcc';
+      if (lat !== st.lat) { st.lat = lat; buildLattice(lat); }
+      st.color = parseInt((HL.ELEMENT_CATEGORIES[e[4]] || '#6fe3ff').slice(1), 16);
+      lbSym.set(e[1], '#' + st.color.toString(16).padStart(6, '0'), 104);
+      lbName.set(e[2] || ('第 ' + Z + ' 号元素'), '#d9d3c7', 84);
+      atomMat.color.setHex(st.color);
+      haloMat.color.setHex(st.color);
+      updateTags();
+    }
+
+    function updateTags() {
+      var ph = st.wS >= Math.max(st.wL, st.wG) ? 'solid' : (st.wG >= st.wL ? 'gas' : 'liquid');
+      lbInfo.set(PHASE[ph].label + '   ·   ' + Math.round(st.Tk) + ' K', PHASE[ph].css, 76);
+    }
+
+    function setTemperature(Tk) { st.Tk = Tk; updateTags(); }
+
+    function setRefract(on) { shell.material = on ? matRefract : matPlain; }
+
+    function setVisible(v) { st.vis = v; if (v) root.visible = true; }
+
+    /* ---------- 每帧 ---------- */
+    function update(dt, time) {
+      /* 出现/收起动画 */
+      var target = st.vis ? 1 : 0;
+      st.k += (target - st.k) * Math.min(1, dt * 6);
+      if (st.k < 0.005 && !st.vis) { root.visible = false; return; }
+      root.visible = true;
+      var s = 0.55 + 0.45 * st.k;
+      cell.scale.setScalar(s);
+      cell.traverse(function (o) { if (o.material && o.material.opacity !== undefined) { o.material.transparent = true; } });
+
+      volMat.uniforms.uTime.value = time;
+      liqMat.uniforms.uTime.value = time;
+
+      /* 相变权重 */
+      var wS = 1 - ss(st.Tm * 0.97, st.Tm * 1.03, st.Tk);
+      var wG = ss(st.Tb * 0.97, st.Tb * 1.03, st.Tk);
+      var wL = clamp(1 - wS - wG, 0, 1);
+      var sum = wS + wL + wG || 1;
+      st.wS = wS / sum; st.wL = wL / sum; st.wG = wG / sum;
+
+      Gas.visible = st.wG > 0.02;
+      Liq.visible = st.wL > 0.02;
+      Sol.visible = st.wS > 0.02;
+
+      /* 气态 */
+      if (Gas.visible) {
+        var sp = 1.7 * Math.sqrt(st.Tk / 298);
+        for (var i = 0; i < NG; i++) {
+          gx[i] += gvx[i] * sp * dt; gy[i] += gvy[i] * sp * dt; gz[i] += gvz[i] * sp * dt;
+          if (gx[i] > R_IN || gx[i] < -R_IN) { gvx[i] *= -1; gx[i] = clamp(gx[i], -R_IN, R_IN); }
+          if (gy[i] > R_IN || gy[i] < -R_IN) { gvy[i] *= -1; gy[i] = clamp(gy[i], -R_IN, R_IN); }
+          if (gz[i] > R_IN || gz[i] < -R_IN) { gvz[i] *= -1; gz[i] = clamp(gz[i], -R_IN, R_IN); }
+          var br = 0.55 + 0.45 * Math.sin(time * 2.2 + i);
+          gas.set(i, gx[i], gy[i], gz[i], 0xa8f0ff);
+          gas.mat.opacity = 0.55 + 0.4 * st.wG;
+        }
+        gas.flush();
+      }
+
+      /* 液态 */
+      if (Liq.visible) {
+        liqMat.uniforms.uAmp.value = 0.10 + 0.10 * clamp((st.Tk - st.Tm) / Math.max(1, st.Tb - st.Tm), 0, 1);
+        for (var b2 = 0; b2 < NB; b2++) {
+          by[b2] += bs[b2] * dt * 1.1;
+          if (by[b2] > -R_IN + liqH) by[b2] = -R_IN;
+          bub.set(b2, bx[b2], by[b2], bz[b2], 0xffb066);
+        }
+        bub.flush();
+        liqBody.material.opacity = 0.4 * st.k;
+      }
+
+      /* 固态 */
+      if (Sol.visible) {
+        var amp = 0.07 * latA * Math.sqrt(clamp(st.Tk / Math.max(1, st.Tm), 0, 1));
+        var rad = latA * 0.13;
+        for (var a2 = 0; a2 < latPts.length; a2++) {
+          var p = latPts[a2];
+          var ox = Math.sin(time * 3.1 + a2 * 1.7) * amp;
+          var oy = Math.sin(time * 2.7 + a2 * 2.3) * amp;
+          var oz = Math.sin(time * 3.4 + a2 * 1.1) * amp;
+          _v3.set(p[0] + ox, p[1] + oy, p[2] + oz);
+          _s3.setScalar(rad);
+          _m4.compose(_v3, _q0, _s3);
+          atoms.setMatrixAt(a2, _m4);
+          _s3.setScalar(rad * 1.9);
+          _m4.compose(_v3, _q0, _s3);
+          halos.setMatrixAt(a2, _m4);
+        }
+        atoms.count = latPts.length; halos.count = latPts.length;
+        atoms.instanceMatrix.needsUpdate = true;
+        halos.instanceMatrix.needsUpdate = true;
+
+        for (var bi = 0; bi < latBonds.length; bi++) {
+          var A = latPts[latBonds[bi][0]], B = latPts[latBonds[bi][1]];
+          bonds.set(bi, A[0], A[1], A[2], B[0], B[1], B[2], 0x9fb3c8, 0x6fe3ff);
+        }
+        bonds.count(latBonds.length); bonds.flush();
+      }
+
+      /* 底座光环与灯环呼吸 */
+      baseRing.material.opacity = (0.55 + 0.35 * Math.sin(time * 1.6)) * st.k;
+      lampRing.material.opacity = (0.6 + 0.3 * Math.sin(time * 2.1)) * st.k;
+      edges.material.opacity = 0.9 * st.k;
+      corner.obj.material.opacity = 0.95 * st.k;
+      volMat.uniforms.uColor.value.setHex(st.color);
+    }
+
+    function dispose() {
+      root.traverse(function (o) {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+      });
+    }
+
+    buildLattice('fcc');
+
+    return {
+      group: root,
+      setElement: setElement,
+      setTemperature: setTemperature,
+      setRefract: setRefract,
+      setVisible: setVisible,
+      update: update,
+      dispose: dispose,
+      isVisible: function () { return st.vis; },
+      info: function () {
+        var d = TH[(st.el ? st.el[0] : 1) - 1] || [];
+        return {
+          Tm: st.Tm, Tb: st.Tb, lattice: (LATTICE[st.lat] || {}).name, use: d[3] || '',
+          wS: st.wS, wL: st.wL, wG: st.wG, visible: root.visible
+        };
+      }
+    };
+  };
+})();

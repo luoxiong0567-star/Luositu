@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人类之光 · HUMAN LIGHT</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/katex.css">
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="logo">✦</div>
+      <div class="brand-text">
+        <h1>人类之光</h1>
+        <p>HUMAN LIGHT</p>
+      </div>
+    </div>
+    <button id="galleryBtn" title="场景目录（Esc）">☰ 场景目录</button>
+    <nav id="sceneList"></nav>
+    <div class="author">
+      <span class="author-label">作者</span>
+      <span class="author-name">罗司徒</span>
+    </div>
+    <div class="sidebar-foot">
+      <span id="fps">-- FPS</span>
+      <span id="gpuState">WebGL</span>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="gl"></canvas>
+
+    <div id="titlebar">
+      <h2 id="sceneTitle">—</h2>
+      <p id="sceneDesc">—</p>
+    </div>
+
+    <div id="panel"></div>
+    <div id="tooltip"></div>
+
+    <div id="gallery"></div>
+
+    <div id="hint">
+      <span><b>左键</b> 平移</span>
+      <span><b>滚轮</b> 缩放</span>
+      <span><b>右键</b> 旋转</span>
+      <span><b>R</b> 复位视角</span>
+    </div>
+  </main>
+
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/katex.min.js"></script>
+<script src="js/core/OrbitControls.js"></script>
+<script src="js/core/SceneManager.js"></script>
+<script src="js/data/elements.js"></script>
+<script src="js/data/thumbs.js"></script>
+<script src="js/scenes/solarSystem.js"></script>
+<script src="js/scenes/periodicTable.js"></script>
+<script src="js/scenes/neuralNetwork.js"></script>
+<script src="js/scenes/mathSurface.js"></script>
+<script src="js/scenes/interference.js"></script>
+<script src="js/scenes/molecular.js"></script>
+<script src="js/scenes/fourier.js"></script>
+<script src="js/scenes/emwave.js"></script>
+<script src="js/scenes/photosynthesis.js"></script>
+<script src="js/scenes/maxwell.js"></script>
+<script src="js/scenes/massenergy.js"></script>
+<!-- 万有引力模块：框架 + 6 个子场景 -->
+<script src="js/scenes/gravity/gravity.js"></script>
+<script src="js/scenes/gravity/g1_well.js"></script>
+<script src="js/scenes/gravity/g2_binary.js"></script>
+<script src="js/scenes/gravity/g3_kepler.js"></script>
+<script src="js/scenes/gravity/g4_three.js"></script>
+<script src="js/scenes/gravity/g5_tidal.js"></script>
+<script src="js/scenes/gravity/g6_escape.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

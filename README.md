@@ -1,0 +1,71 @@
+# 人类之光 · HUMAN LIGHT
+
+三维科学可视化网页应用 · 作者：罗司徒
+
+**交付形态：纯 HTML**。不打包 exe，所有交付物都由浏览器直接打开，零安装、零依赖、全程离线。
+
+## 交付物
+
+| 文件 | 体积 | 适用场景 |
+|---|---|---|
+| `release\人类之光.html` | ~1.9 MB | **唯一推荐交付物**。单文件自包含，微信/钉钉/邮件直接发，双击浏览器即开 |
+| `release\人类之光-网页版.zip` | ~0.8 MB | 备选。web/ 文件夹形态，需解压后双击 `index.html` |
+
+两个文件功能完全一致（12 个 3D 场景）。分享给他人看，用第一个文件即可；详细说明见 `release\分享说明.md`。
+
+## 单文件自包含 HTML
+
+把 `web/` 目录 27 个文件（CSS、Three.js、KaTeX、12 个场景脚本）全部内联为一个 `.html`，因此不需要压缩包、不需要保持目录结构、不需要本地服务器。KaTeX 的 woff2 字体已 base64 内嵌进 CSS，公式渲染全程离线。
+
+**已验证**：在只含这一个文件的隔离目录中，以 `file://` 协议无任何特殊参数打开，12 个场景全部正常注册并渲染（含最重的光合作用场景）。手机浏览器（iPhone Safari 等）同样直接打开。
+
+**启动体验**：无直达链接打开时先展示**场景目录页**——12 张 CDP 真实渲染的场景缩略图 + 一句话简介，点击卡片进入场景；侧栏「☰ 场景目录」按钮或 `Esc` 随时返回。带 `#场景id` 直达链接则跳过目录直接进入。
+
+**万有引力场景**（第 12 个）内含六个可切换子场景：引力井 / 双星互绕 / 开普勒三定律 / 三体混沌 / 潮汐力 / 逃逸速度，用 `#gravity` 进入后点面板顶部按钮切换，或用 `?g=子场景id&...#gravity` 直达（子场景 id：`well` `binary` `kepler` `threebody` `tidal` `escape`）。
+
+**发布流程**（改动源码后，一条命令产出全部交付物）：
+
+```bash
+python build_single_html.py                    # → release\人类之光.html + 人类之光-网页版.zip
+python build_single_html.py 自定义路径.html     # 仅导出单文件到指定路径
+```
+
+脚本内联前会逐个文件检查 `</script>`、`<!--`、`<style>` 等会破坏 HTML 结构的字符，命中则中止并报出文件名，不会产出坏文件。
+
+**注意**：`web/index.html` 不能单独拿走——它是相对路径引用 `css/`、`js/`、`vendor/` 的入口，脱离目录即白屏。要单文件分享请用上面导出的 `.html`。
+
+## 从源码开发
+
+```bat
+run.cmd     :: 免安装预览（Edge --app 模式打开 web/index.html，改代码后重开即可）
+```
+
+或直接用任意现代浏览器打开 `web\index.html`。
+
+源码结构：
+
+```
+web/
+  vendor/three.min.js      Three.js r149（UMD，已本地化，不依赖 CDN）
+  vendor/katex.min.js      KaTeX 0.16.11（公式排版，已本地化）
+  css/katex.css            KaTeX 样式（woff2 字体 base64 内嵌，离线可用）
+  js/core/                 轨道控制器（左键平移/右键旋转/滚轮缩放/触屏手势）、场景管理器（GPU 资源回收）
+  js/scenes/               12 个场景插件（gravity/ 为万有引力模块：主框架 + 6 个子场景文件）
+  js/data/                 元素数据、场景缩略图（thumbs.js，CDP 真实渲染截图）
+  js/main.js               侧栏、场景目录页、参数面板、URL 参数解析
+build_single_html.py       唯一发布脚本（单文件 HTML + 网页版 zip）
+_thumbs.js                 缩略图再生成工具（CDP 逐场景截图 → web/js/data/thumbs.js）
+_grav_test.js              万有引力模块自测（CDP 六子场景渲染 + 物理读数抽查，GRAV_SHOT=1 同时截图）
+_iso_test.js               单文件版隔离冒烟（目录页 + 全场景抽查）
+_cdp.js / _eval.js         CDP 截图与页面内断言工具（回归验证用）
+_versions/                 场景历史版本备份（如 periodicTable v1/v2）
+```
+
+新增场景只需三步：在 `web/js/scenes/` 新建 js 文件、按 `HL.registerScene` 契约注册、在 `web/index.html` 追加一行 `<script>`。侧栏、参数面板、资源回收、快捷键全部自动生效。
+
+## 已知工程约束（勿踩回去）
+
+1. **Three.js 不能用 ES module 版**——`file://` 下 UMD 最稳，r163 起官方已移除 UMD 构建。
+2. **场景 `create` 中不要只写轨道控制器私有球坐标**——框架会在 create 后调用 `syncFromCamera()` 覆盖，必须同时写 `camera.position`。
+3. **场景 id 与 URL hash 必须一致**（如 `#molecule`，不是 `#molecular`），否则回退到第一个场景。
+4. **不要再引入任何打包壳**（pywebiew/PyInstaller/Electron 均已评估并放弃）——浏览器直开是最稳、最轻的形态。
