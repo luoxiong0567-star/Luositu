@@ -68,7 +68,11 @@
   function buildList() {
     var wrap = document.getElementById('sceneList');
     wrap.innerHTML = '';
-    HL.allScenes().forEach(function (def, i) {
+    var all = HL.allScenes();
+    var used = {};
+
+    function addItem(def) {
+      used[def.id] = true;
       var item = document.createElement('div');
       item.className = 'scene-item';
       item.dataset.id = def.id;
@@ -77,7 +81,23 @@
         '<div class="txt"><b>' + def.name + '</b><span>' + def.short + '</span></div>';
       item.addEventListener('click', function () { load(def.id); });
       wrap.appendChild(item);
-    });
+    }
+
+    function addChapter(ch) {
+      var head = document.createElement('div');
+      head.className = 'scene-chapter';
+      head.innerHTML = '<b>' + ch.name + '</b><span>' + ch.sub + '</span>';
+      wrap.appendChild(head);
+      // 按章节叙事顺序输出（ch.ids 顺序），与目录页一致
+      ch.ids.forEach(function (id) {
+        var def = HL.getScene(id);
+        if (def) addItem(def);
+      });
+    }
+
+    CHAPTERS.forEach(addChapter);
+    // 未归章场景兜底（防止新增场景遗漏）
+    all.forEach(function (def) { if (!used[def.id]) addItem(def); });
   }
 
   function load(id) {
@@ -86,6 +106,9 @@
       return;
     }
     hideTooltip();
+    // 目录页展开时从侧栏/快捷键切换场景：收起目录浮层。
+    // 注意 init() 会在目录页背后预载第一个场景（此时 currentId 为空），不能误关目录页
+    if (currentId && galleryEl && galleryEl.classList.contains('show')) hideGallery();
     if (!manager.load(id)) return;
     currentId = id;
 
@@ -220,8 +243,10 @@
     CHAPTERS.forEach(function (ch) {
       html += '<div class="gal-chapter"><span class="gal-ch-name">' + ch.name + '</span>' +
         '<span class="gal-ch-sub">' + ch.sub + '</span></div><div class="gal-grid">';
-      all.forEach(function (def, i) {
-        if (ch.ids.indexOf(def.id) >= 0) addCard(def, i);
+      // 按章节叙事顺序输出（ch.ids 顺序），与侧栏分组一致
+      ch.ids.forEach(function (id) {
+        var def = HL.getScene(id);
+        if (def) addCard(def, all.indexOf(def));
       });
       html += '</div>';
     });
@@ -246,29 +271,16 @@
     });
   }
 
-  /* 侧栏收起/展开会改变画布尺寸，动画结束后同步一次渲染尺寸 */
-  var galResizeTimer = null;
-  function syncResize() {
-    if (galResizeTimer) clearTimeout(galResizeTimer);
-    galResizeTimer = setTimeout(function () {
-      try { if (manager && manager.resize) manager.resize(); } catch (e) { /* 忽略 */ }
-    }, 380);
-  }
-
   function showGallery() {
     if (!galleryEl) return;
     galleryEl.classList.add('show');
-    document.body.classList.add('gal-open');
     hideGuide();
-    syncResize();
     // 清掉 hash，刷新后仍停留在目录页
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* 个别环境受限 */ }
   }
 
   function hideGallery() {
     if (galleryEl) galleryEl.classList.remove('show');
-    document.body.classList.remove('gal-open');
-    syncResize();
     // 从目录进入场景后，再补弹引导（避免浮层叠在目录页上）
     if (pendingGuide) {
       var d = pendingGuide; pendingGuide = null;

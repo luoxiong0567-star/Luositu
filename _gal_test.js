@@ -1,11 +1,11 @@
-// 验证：首页（目录页）收起左侧栏；进入场景后侧栏恢复
+// 验证：首页侧栏常驻 + 侧栏四章分组（宏观宇宙→微观物质→生命演化→抽象之美）
 const { execFile } = require('child_process');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const ROOT = 'C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light';
-const PORT = 9461;
+const PORT = 9462;
 const URL_BASE = 'file:///C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light/web/index.html';
 const W = 1280, H = 760;
 
@@ -57,58 +57,67 @@ function httpReq(url, method) {
   };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const LOG = []; const log = s => { LOG.push(s); };
+  let bad = 0;
 
   const probe = `JSON.stringify((function(){
-    var sb=document.getElementById('sidebar'), g=document.getElementById('gallery'), st=document.getElementById('stage');
+    var sb=document.getElementById('sidebar'), g=document.getElementById('gallery');
     return {
-      galOpen: document.body.classList.contains('gal-open'),
       galShow: !!(g && g.classList.contains('show')),
       sbW: sb ? Math.round(sb.getBoundingClientRect().width) : -1,
-      sbOpacity: sb ? getComputedStyle(sb).opacity : '',
-      stageW: st ? Math.round(st.getBoundingClientRect().width) : -1,
-      cards: g ? g.querySelectorAll('.gal-card').length : -1
+      chapters: Array.prototype.map.call(document.querySelectorAll('#sceneList .scene-chapter b'), function(e){return e.textContent;}),
+      subs: Array.prototype.map.call(document.querySelectorAll('#sceneList .scene-chapter span'), function(e){return e.textContent;}),
+      items: document.querySelectorAll('#sceneList .scene-item').length,
+      cards: g ? g.querySelectorAll('.gal-card').length : -1,
+      active: (document.querySelector('#sceneList .scene-item.active')||{}).datasetId || (function(){var a=document.querySelector('#sceneList .scene-item.active');return a?a.dataset.id:'';})()
     };
   })())`;
 
-  // A. 首页（无 hash）
+  // A. 首页：侧栏常驻 + 四章分组 + 目录页卡片
   await send('Page.navigate', { url: URL_BASE + '?_t=' + Date.now() });
   await sleep(4000);
   const a = await evalx(probe) || {};
-  const okA = a.galOpen && a.galShow && a.sbW <= 2 && a.stageW >= W - 40 && a.cards === 12;
-  log('── 首页收起侧栏   ' + (okA ? 'PASS' : 'FAIL') + '  galOpen=' + a.galOpen + ' sidebarW=' + a.sbW +
-    ' opacity=' + a.sbOpacity + ' stageW=' + a.stageW + '(视口' + W + ') cards=' + a.cards +
-    (errors.length ? '  !! ' + errors[0] : ''));
-  let bad = okA ? 0 : 1;
+  const expectCh = ['Ⅰ · 宇宙的法则', 'Ⅱ · 物质的语言', 'Ⅲ · 规律的抽象', 'Ⅳ · 思维的光芒'];
+  const okA = a.galShow && a.sbW >= 200 && a.cards === 12 && a.items === 12 &&
+    JSON.stringify(a.chapters) === JSON.stringify(expectCh);
+  log('── 首页侧栏+四章   ' + (okA ? 'PASS' : 'FAIL') + '  sidebarW=' + a.sbW + ' cards=' + a.cards +
+    ' items=' + a.items + ' 章=' + JSON.stringify(a.chapters) + (errors.length ? '  !! ' + errors[0] : ''));
+  if (!okA) bad++;
+  log('   分组副标题: ' + JSON.stringify(a.subs));
 
-  // B. 点击卡片进入场景 → 侧栏恢复
-  await evalx(`(function(){ var c=document.querySelector('.gal-card'); if(c) c.click(); return '1'; })()`);
-  await sleep(3000);
-  const b = await evalx(probe) || {};
-  const okB = !b.galOpen && !b.galShow && b.sbW >= 200 && b.stageW <= W - 200;
-  log('── 进场景恢复侧栏 ' + (okB ? 'PASS' : 'FAIL') + '  galOpen=' + b.galOpen + ' sidebarW=' + b.sbW +
-    ' stageW=' + b.stageW + (errors.length ? '  !! ' + errors[0] : ''));
+  // B. 侧栏章节顺序与场景归属抽查（第一章 5 个、第二章 3 个…）
+  const b = await evalx(`JSON.stringify((function(){
+    var out=[], chs=document.querySelectorAll('#sceneList .scene-chapter');
+    for (var i=0;i<chs.length;i++){
+      var ids=[], n=chs[i].nextElementSibling;
+      while(n && !n.classList.contains('scene-chapter')){ if(n.classList.contains('scene-item')) ids.push(n.dataset.id); n=n.nextElementSibling; }
+      out.push(ids.join(','));
+    }
+    return out;
+  })())`) || [];
+  const expectGroups = ['solar,gravity,massenergy,maxwell,emwave', 'periodic,molecule,photosynthesis', 'math,fourier,interference', 'neural'];
+  const okB = JSON.stringify(b) === JSON.stringify(expectGroups);
+  log('── 分组归属        ' + (okB ? 'PASS' : 'FAIL') + '  ' + JSON.stringify(b));
   if (!okB) bad++;
 
-  // C. Esc 回目录 → 再次收起
-  await evalx(`(function(){ document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); return '1'; })()`);
-  await sleep(2000);
+  // C. 点侧栏项进场景 → 高亮 + 侧栏仍在
+  await evalx(`(function(){ var it=document.querySelector('#sceneList .scene-item[data-id="periodic"]'); if(it) it.click(); return '1'; })()`);
+  await sleep(3000);
   const c = await evalx(probe) || {};
-  const okC = c.galOpen && c.galShow && c.sbW <= 2;
-  log('── Esc 回目录     ' + (okC ? 'PASS' : 'FAIL') + '  galOpen=' + c.galOpen + ' sidebarW=' + c.sbW +
-    ' cards=' + c.cards + (errors.length ? '  !! ' + errors[0] : ''));
+  const okC = !c.galShow && c.sbW >= 200 && c.active === 'periodic' && c.items === 12;
+  log('── 侧栏进场景      ' + (okC ? 'PASS' : 'FAIL') + '  active=' + c.active + ' sidebarW=' + c.sbW +
+    ' 目录页=' + c.galShow + (errors.length ? '  !! ' + errors[0] : ''));
   if (!okC) bad++;
 
-  // D. 直达链接进场景时不收起
-  await send('Page.navigate', { url: URL_BASE + '?_t=' + Date.now() + '#solar' });
-  await sleep(4000);
+  // D. Esc 回目录 → 侧栏仍常驻
+  await evalx(`(function(){ window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); return '1'; })()`);
+  await sleep(1500);
   const d = await evalx(probe) || {};
-  const okD = !d.galOpen && !d.galShow && d.sbW >= 200;
-  log('── 直达链接       ' + (okD ? 'PASS' : 'FAIL') + '  galOpen=' + d.galOpen + ' sidebarW=' + d.sbW +
-    (errors.length ? '  !! ' + errors[0] : ''));
+  const okD = d.galShow && d.sbW >= 200 && d.cards === 12;
+  log('── Esc 回目录      ' + (okD ? 'PASS' : 'FAIL') + '  sidebarW=' + d.sbW + ' cards=' + d.cards);
   if (!okD) bad++;
 
   const errOk = errors.length === 0;
-  log(errOk && bad === 0 ? '\n✅ 目录页侧栏 4/4 通过' : '\n❌ ' + bad + ' 项失败' + (errors.length ? '  err=' + errors[0] : ''));
+  log(errOk && bad === 0 ? '\n✅ 侧栏四章分组 4/4 通过' : '\n❌ ' + bad + ' 项失败' + (errors.length ? '  err=' + errors[0] : ''));
   fs.writeFileSync(path.join(ROOT, '_gal_out.txt'), LOG.join('\n'), 'utf8');
   try { child.kill(); } catch (e) {}
   process.exit(0);
