@@ -57,6 +57,34 @@
     name: '三体混沌',
     tab: '④ 三体混沌',
     desc: '拉格朗日点 · 8 字轨道 · 微小扰动引发的混沌',
+    tour: [
+      {
+        t: '八字舞：稀有的周期三体解',
+        d: '三个等质量天体沿同一条"8"字形跑道相互追逐，是 1993/2000 年才被发现的周期解（Chenciner–Montgomery）。能量 E = −1.287 时轨道严格闭合。',
+        exp: '看 HUD 的能量漂移 ~10⁻⁸：数值积分几乎不漏能量。',
+        cam: [[0, 9, 15], [0, 0, 0]]
+      },
+      {
+        t: '拉格朗日：5 个引力平衡点',
+        d: '「拉格朗日」预设里，两个主星之外存在 5 个平动点（L1–L5）。其中 L4/L5 与两主星构成等边三角形，是稳定的"引力停车场"——木星的特洛伊小行星就聚在那里。',
+        exp: '已为你切换到拉格朗日预设：观察试验粒子在 L4/L5 附近画出的花瓣轨迹。',
+        apply: function () { P.preset = 'lagrange'; if (inst && inst.setParam) inst.setParam('preset', 'lagrange'); },
+        cam: [[0, 11, 18], [0, 0, 0]]
+      },
+      {
+        t: '混沌：对初始条件的敏感',
+        d: '「混沌」预设中，给某个天体加上 10⁻⁶ 量级的微小扰动，两条本来完全重合的轨迹会指数式分离——Lyapunov 指数 λ > 0 就是混沌的判据。',
+        exp: '已为你切换到混沌预设：把「扰动 δ」从 10⁻⁴ 拉到 10⁻⁶，盯着「分离距离 Δ」爆炸式增长。',
+        apply: function () { P.preset = 'chaos'; if (inst && inst.setParam) inst.setParam('preset', 'chaos'); }
+      },
+      {
+        t: '确定性混沌 ≠ 随机',
+        d: '三体系统完全遵守牛顿定律、完全确定，却长期不可预测——这正是"蝴蝶效应"的数学原型（庞加莱，1890）。而 8 字解恰好位于混沌海洋中的稳定小岛。',
+        exp: '回到「8 字轨道」预设，确认它对微小扰动居然有韧性——周期解的"走廊"。',
+        apply: function () { P.preset = 'figure8'; if (inst && inst.setParam) inst.setParam('preset', 'figure8'); },
+        cam: [[0, 9, 15], [0, 0, 0]]
+      }
+    ],
     view: [[0, 15, 24], [0, 0, 0]],
     defaults: {
       preset: 'figure8', logd: 4, speed: 1.0, trail: true, ghost: true

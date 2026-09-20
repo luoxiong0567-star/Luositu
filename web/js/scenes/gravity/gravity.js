@@ -616,10 +616,11 @@
 
     // 动态控制面板：随子场景变化
     controls: function () {
+      var d = GRAV.subs[CUR.sub];
       var list = [{
         type: 'buttons', key: 'sub', label: '子场景', value: CUR.sub, options: subOptions()
       }];
-      var d = GRAV.subs[CUR.sub];
+      if (d && d.tour) list.push({ type: 'button', key: 'tour', label: '📖 讲解模式' });
       if (d && d.controls) list = list.concat(d.controls);
       return list;
     },
@@ -644,6 +645,7 @@
 
       function setSub(id, rebuild) {
         if (!GRAV.subs[id] || id === curId) return;
+        exitTour();
         if (inst && inst.dispose) { try { inst.dispose(); } catch (e) { /* 忽略 */ } }
         if (group) { scene.remove(group); HL.disposeObject(group); }
         hud.clear();
@@ -687,12 +689,155 @@
       }
       setSub(want, false);
 
+      /* ---------------- 讲解模式（分步旁白）引擎 ----------------
+       * 子场景在 registerSub 的 def 上提供 tour: [
+       *   { t:标题, d:解说, exp:参数实验建议, cam:[[pos],[target]],
+       *     pulse:[x,y,z], apply:function(){} }
+       * ]
+       * 行为：暂停模拟 + 相机飞行 + 脉冲光环高亮 + 底部旁白卡片 */
+      var tour = null;          // { steps, idx }
+      var fly = null;           // 相机飞行插值 { k, p0, t0, p1, t1 }
+      var pulse = null;         // 高亮脉冲光环
+      var frozenT = 0;          // 暂停时刻的场景时间
+      var lastT = 0;
+      var tourUi = null;
+
+      function ensureTourUi() {
+        if (tourUi) return tourUi;
+        var root = document.createElement('div');
+        root.id = 'gravTour';
+        stage.appendChild(root);
+        root.innerHTML =
+          '<div class="gt-card">' +
+          '<div class="gt-head"><span class="gt-book">📖</span><b class="gt-title"></b>' +
+          '<span class="gt-step"></span></div>' +
+          '<div class="gt-body"></div>' +
+          '<div class="gt-exp"></div>' +
+          '<div class="gt-btns">' +
+          '<button class="gt-prev">← 上一步</button>' +
+          '<button class="gt-next">下一步 →</button>' +
+          '<button class="gt-exit">✕ 退出讲解</button>' +
+          '</div></div>';
+        root.querySelector('.gt-prev').addEventListener('click', function () {
+          if (tour && tour.idx > 0) tourStep(tour.idx - 1);
+        });
+        root.querySelector('.gt-next').addEventListener('click', function () {
+          if (!tour) return;
+          if (tour.idx < tour.steps.length - 1) tourStep(tour.idx + 1);
+          else exitTour();
+        });
+        root.querySelector('.gt-exit').addEventListener('click', exitTour);
+        tourUi = {
+          root: root,
+          title: root.querySelector('.gt-title'),
+          step: root.querySelector('.gt-step'),
+          body: root.querySelector('.gt-body'),
+          exp: root.querySelector('.gt-exp'),
+          prev: root.querySelector('.gt-prev'),
+          next: root.querySelector('.gt-next')
+        };
+        return tourUi;
+      }
+
+      function ensurePulse() {
+        if (pulse) return pulse;
+        pulse = new THREE.Group();
+        var m1 = new THREE.Mesh(
+          new THREE.TorusGeometry(1.05, 0.028, 8, 64),
+          new THREE.MeshBasicMaterial({ color: 0x7fd4ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        m1.rotation.x = Math.PI / 2;
+        var m2 = new THREE.Mesh(
+          new THREE.TorusGeometry(1.05, 0.028, 8, 64),
+          m1.material.clone()
+        );
+        var glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: GRAV.glowTexture(THREE, GRAV.rgba(0x7fd4ff, 0.5)),
+          transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending
+        }));
+        glow.scale.setScalar(1.7);
+        pulse.add(m1); pulse.add(m2); pulse.add(glow);
+        pulse.userData = { r1: m1, r2: m2 };
+        pulse.visible = false;
+        scene.add(pulse);
+        return pulse;
+      }
+
+      function startFly(pos, tgt) {
+        fly = {
+          k: 0,
+          p0: camera.position.clone(),
+          t0: controls.target.clone(),
+          p1: new THREE.Vector3(pos[0], pos[1], pos[2]),
+          t1: new THREE.Vector3(tgt ? tgt[0] : 0, tgt ? tgt[1] : 0, tgt ? tgt[2] : 0)
+        };
+      }
+
+      function tourStep(i) {
+        var s = tour.steps[i];
+        tour.idx = i;
+        var ui = ensureTourUi();
+        ui.title.textContent = s.t;
+        ui.step.textContent = (i + 1) + ' / ' + tour.steps.length;
+        ui.body.textContent = s.d;
+        ui.exp.style.display = s.exp ? '' : 'none';
+        ui.exp.textContent = s.exp ? '💡 实验建议：' + s.exp : '';
+        ui.prev.style.visibility = i > 0 ? '' : 'hidden';
+        ui.next.textContent = i < tour.steps.length - 1 ? '下一步 →' : '完成 ✓';
+        if (s.cam) startFly(s.cam[0], s.cam[1]);
+        if (s.pulse) {
+          var p = ensurePulse();
+          p.visible = true;
+          p.position.set(s.pulse[0], s.pulse[1], s.pulse[2]);
+        } else if (pulse) pulse.visible = false;
+        if (s.apply) { try { s.apply(); } catch (e) { /* 忽略 */ } }
+      }
+
+      function enterTour() {
+        var def = GRAV.subs[curId];
+        if (!def || !def.tour || !def.tour.length) return;
+        tour = { steps: def.tour, idx: 0 };
+        frozenT = lastT;
+        var ui = ensureTourUi();
+        ui.root.classList.add('show');
+        tourStep(0);
+      }
+
+      function exitTour() {
+        tour = null;
+        fly = null;
+        if (pulse) pulse.visible = false;
+        if (tourUi) tourUi.root.classList.remove('show');
+      }
+
       return {
         update: function (dt, t) {
-          if (inst && inst.update) inst.update(dt, t);
+          lastT = t;
+          // 相机飞行 / 脉冲动画使用真实 dt（不受讲解暂停影响）
+          if (fly) {
+            fly.k = Math.min(1, fly.k + dt / 1.1);
+            var e = fly.k < 0.5 ? 2 * fly.k * fly.k : 1 - Math.pow(-2 * fly.k + 2, 2) / 2;
+            camera.position.lerpVectors(fly.p0, fly.p1, e);
+            controls.target.lerpVectors(fly.t0, fly.t1, e);
+            controls.syncFromCamera();
+            if (fly.k >= 1) fly = null;
+          }
+          if (pulse && pulse.visible) {
+            pulse.userData.r1.rotation.z += dt * 1.4;
+            pulse.userData.r2.rotation.z -= dt * 1.1;
+            var br = 1 + Math.sin(t * 3.2) * 0.10;
+            pulse.scale.setScalar(br);
+          }
+          // 讲解模式下冻结模拟（dt=0 且时间冻结），只留飞行动画
+          if (tour) {
+            if (inst && inst.update) inst.update(0, frozenT);
+          } else if (inst && inst.update) {
+            inst.update(dt, t);
+          }
         },
         setParam: function (key, value) {
           if (key === 'sub') { setSub(value, true); return; }
+          if (key === 'tour') { if (!tour) enterTour(); return; }
           store[key] = value;
           var id = curId;
           if (id && key.indexOf(id + '_') === 0) {

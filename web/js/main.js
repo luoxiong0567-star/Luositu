@@ -58,10 +58,10 @@
 
     var hash = (location.hash || '').replace('#', '');
     var list = HL.allScenes();
-    var start = hash && HL.getScene(hash) ? hash : list[0].id;
-    load(start);
-    // 无直达链接时启动进目录页；带 #场景id 则直接进入场景
-    if (!(hash && HL.getScene(hash))) showGallery();
+    var direct = hash && HL.getScene(hash) ? hash : null;
+    // 先开目录再 load：目录页打开时引导浮层会延迟到关闭目录后补弹
+    if (!direct) showGallery();
+    load(direct || list[0].id);
   }
 
   /* ---------------- 侧栏 ---------------- */
@@ -99,6 +99,72 @@
     });
 
     buildPanel(def);
+    scheduleGuide(def);
+  }
+
+  /* ---------------- 首次引导浮层 ---------------- */
+  var guideEl = null, guideTimer = null, pendingGuide = null;
+
+  function scheduleGuide(def) {
+    var g = document.getElementById('gallery');
+    if (g && g.classList.contains('show')) {
+      pendingGuide = def;                    // 目录页开着：等关闭后再弹
+      return;
+    }
+    showGuide(def);
+  }
+
+  function showGuide(def) {
+    var seen = {};
+    try { seen = JSON.parse(localStorage.getItem('hl.guide.v1') || '{}'); } catch (e) { /* 隐私模式等 */ }
+    var force = /[?&]guide=1/.test(location.search);   // ?guide=1 强制重看
+    var firstVisit = !seen[def.id];
+    if (!firstVisit && !force) return;
+    if (!force) {
+      seen[def.id] = true;
+      try { localStorage.setItem('hl.guide.v1', JSON.stringify(seen)); } catch (e) { /* 忽略 */ }
+    }
+    flashHint();
+
+    if (!guideEl) {
+      guideEl = document.createElement('div');
+      guideEl.id = 'guide';
+      document.body.appendChild(guideEl);
+      guideEl.addEventListener('pointerdown', function (e) {
+        e.stopPropagation();
+        hideGuide();
+      });
+    }
+    guideEl.innerHTML =
+      '<div class="gd-card">' +
+      '<div class="gd-head"><span class="gd-ico">' + def.icon + '</span><b>' + def.name + '</b>' +
+      '<span class="gd-tip">首次进入 · 操作指引</span></div>' +
+      '<div class="gd-rows">' +
+      '<span><i class="gd-mouse gd-l"></i>左键拖动 <b>平移</b></span>' +
+      '<span><i class="gd-mouse gd-r"></i>右键拖动 <b>旋转</b></span>' +
+      '<span><i class="gd-wheel"></i>滚轮 <b>缩放</b></span>' +
+      '<span><kbd>Esc</kbd> 场景目录</span>' +
+      '<span><kbd>R</kbd> 复位 · <kbd>F</kbd> 全屏</span>' +
+      '</div>' +
+      '<div class="gd-bar"><i></i></div>' +
+      '</div>';
+    guideEl.classList.add('show');
+    clearTimeout(guideTimer);
+    guideTimer = setTimeout(hideGuide, 4200);
+  }
+
+  function hideGuide() {
+    if (guideEl) guideEl.classList.remove('show');
+    clearTimeout(guideTimer);
+  }
+
+  function flashHint() {
+    var h = document.getElementById('hint');
+    if (!h) return;
+    h.classList.remove('flash');
+    void h.offsetWidth;                    // 重启动画
+    h.classList.add('flash');
+    setTimeout(function () { h.classList.remove('flash'); }, 3200);
   }
 
   /* ---------------- 场景目录页 ---------------- */
@@ -156,12 +222,18 @@
   function showGallery() {
     if (!galleryEl) return;
     galleryEl.classList.add('show');
+    hideGuide();
     // 清掉 hash，刷新后仍停留在目录页
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* 个别环境受限 */ }
   }
 
   function hideGallery() {
     if (galleryEl) galleryEl.classList.remove('show');
+    // 从目录进入场景后，再补弹引导（避免浮层叠在目录页上）
+    if (pendingGuide) {
+      var d = pendingGuide; pendingGuide = null;
+      showGuide(d);
+    }
   }
 
   function toggleGallery() {
