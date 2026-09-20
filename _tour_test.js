@@ -25,7 +25,7 @@ const EXPR = `(function(){
   var inst = window.HL && HL.manager && HL.manager.inst;
   if (!inst) return JSON.stringify({ err: 'no inst' });
   inst.setParam('tour');
-  var ui = document.getElementById('gravTour');
+  var ui = document.getElementById('hlTour');
   out.shown1 = !!(ui && ui.classList.contains('show'));
   out.title1 = ui ? (ui.querySelector('.gt-title')||{}).textContent : '';
   out.step1 = ui ? (ui.querySelector('.gt-step')||{}).textContent : '';
