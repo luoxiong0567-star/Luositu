@@ -1,6 +1,0 @@
-root: width=344px rect.w=344 right=606 inlineW=-
-children:
-gh-fold w=65
-gc-card w=344
-gc-card w=344
-gc-card w=344

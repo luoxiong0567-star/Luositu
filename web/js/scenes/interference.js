@@ -15,6 +15,7 @@ HL.registerScene({
   desc: '杨氏双缝实验。屏上光强由双缝干涉因子与单缝衍射包络共同决定：条纹间距 Δy = λL/d，包络第一零点 y₁ = λL/a。切换到「光子累积」，可看到离散光子逐个落点、最终浮现出干涉条纹。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'range', key: 'wl', label: '波长 λ', min: 380, max: 780, step: 5, value: 550, unit: ' nm' },
     { type: 'range', key: 'd', label: '缝间距 d', min: 0.08, max: 0.6, step: 0.01, value: 0.25, unit: ' mm' },
     { type: 'range', key: 'a', label: '缝宽 a', min: 0.01, max: 0.12, step: 0.005, value: 0.04, unit: ' mm' },
@@ -261,43 +262,92 @@ HL.registerScene({
     }
     refreshNote();
 
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、相干光：从光源到双缝',
+        d: '左端是光源，它发出的光到达中间的双缝挡板——这是杨氏 1801 年的关键巧思：用同一波前分出两路光，保证它们步调一致（相干）。若是两个各自独立的手电筒，条纹永远不会出现。观察屏在右侧 20 个单位之外。',
+        exp: '右键拖动旋转到侧面视角，看清「光源 → 双缝 → 观察屏」三段结构。',
+        cam: [[-14, 7, 26], [8, -1, 0]],
+        pulse: [-9, 0, 0], r: 1.6
+      },
+      {
+        t: '二、光程差决定明暗',
+        d: '两缝到屏上某点的距离不同，光走过的路程差 δ = d·sinθ。当 δ 等于整数个波长（mλ）时两列波同相叠加——亮纹；等于半波长的奇数倍时相消——暗纹。条纹间距 Δy = λL/d：缝距越大条纹越密，屏越远条纹越宽。',
+        exp: '退出讲解后把「缝间距 d」从 0.25 调到 0.50，看条纹变密。',
+        cam: [[-1, 2.5, 12], [6, 0, 0]],
+        pulse: [0, 0, 0], r: 2.6
+      },
+      {
+        t: '三、观察屏上的条纹',
+        d: '黄色曲线是屏上的光强分布 I = I₀(sinβ/β)²cos²α：中央最亮，向两侧递减。条纹的颜色就是光的波长：380 nm 紫到 780 nm 红。1801 年的这条条纹，让人类第一次量出了「光有多细」。',
+        exp: '把波长 λ 拉到 700 nm：条纹变红、同时变宽。',
+        cam: [[26, 3, 14], [20, 0, 0]],
+        pulse: [20, 0, 0], r: 3.2
+      },
+      {
+        t: '四、单缝衍射包络',
+        d: '注意亮条纹的整体亮度还有一个「大包络」：每条缝自身的宽度 a 会产生衍射，包络第一零点在 y₁ = λL/a。整幅图样其实是「双缝干涉 × 单缝衍射」的乘积——缝越窄，包络越宽、可见条纹越多。',
+        exp: '把「缝宽 a」调到 0.12 mm，观察包络收窄、可见条纹变少。',
+        cam: [[22, 2, 10], [20, 0, 0]],
+        pulse: null
+      },
+      {
+        t: '五、单个光子也会干涉',
+        d: '切到「光子累积」模式：光子一颗一颗随机到达屏上，每个落点看似杂乱，但几万颗之后干涉条纹自己浮现出来。单个光子在出发时「同时走过两条缝」并与自己干涉；而一旦装上探测器去看它走了哪条缝，条纹立刻消失——这是量子力学最深刻的实验之一，也是「测量改变系统」的最早例证。',
+        exp: '已为你切到光子累积模式。按「清除累积」可以从零再看一遍条纹浮现。',
+        cam: [[24, 2, 12], [20, 0, 0]],
+        pulse: [20, 0, 0], r: 3.2,
+        apply: function () {
+          P.mode = 'photon';
+          photonCount = 0;
+          paintScreen(true);
+          refreshNote();
+        }
+      }
+    ]);
+
     return {
-      update: function (dt) {
-        t += dt;
+      update: function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) {
+          t += ddt;
 
-        // 波场：两缝发出的柱面波叠加
-        field.visible = P.field;
-        if (P.field) {
-          var lamVis = 0.55 + (P.wl - 380) / 400 * 0.85;
-          var k = Math.PI * 2 / lamVis;
-          var w = k * 2.4;
-          var arr2 = fg.attributes.color.array;
-          for (var i = 0; i < NX * NY; i++) {
-            var x = fpos[i * 3], y = fpos[i * 3 + 1];
-            var r1 = Math.sqrt(x * x + (y - SLOT) * (y - SLOT));
-            var r2 = Math.sqrt(x * x + (y + SLOT) * (y + SLOT));
-            var damp = 1 / (1 + r1 * 0.16);
-            var A = (Math.cos(k * r1 - w * t) / (1 + r1 * 0.12) + Math.cos(k * r2 - w * t) / (1 + r2 * 0.12));
-            var v = Math.min(1, Math.abs(A) * 1.5) * damp * 1.9;
-            v = Math.max(0, Math.min(1, v));
-            arr2[i * 3] = rgb[0] * v + 0.02;
-            arr2[i * 3 + 1] = rgb[1] * v + 0.02;
-            arr2[i * 3 + 2] = rgb[2] * v + 0.05;
+          // 波场：两缝发出的柱面波叠加
+          field.visible = P.field;
+          if (P.field) {
+            var lamVis = 0.55 + (P.wl - 380) / 400 * 0.85;
+            var k = Math.PI * 2 / lamVis;
+            var w = k * 2.4;
+            var arr2 = fg.attributes.color.array;
+            for (var i = 0; i < NX * NY; i++) {
+              var x = fpos[i * 3], y = fpos[i * 3 + 1];
+              var r1 = Math.sqrt(x * x + (y - SLOT) * (y - SLOT));
+              var r2 = Math.sqrt(x * x + (y + SLOT) * (y + SLOT));
+              var damp = 1 / (1 + r1 * 0.16);
+              var A = (Math.cos(k * r1 - w * t) / (1 + r1 * 0.12) + Math.cos(k * r2 - w * t) / (1 + r2 * 0.12));
+              var v = Math.min(1, Math.abs(A) * 1.5) * damp * 1.9;
+              v = Math.max(0, Math.min(1, v));
+              arr2[i * 3] = rgb[0] * v + 0.02;
+              arr2[i * 3 + 1] = rgb[1] * v + 0.02;
+              arr2[i * 3 + 2] = rgb[2] * v + 0.05;
+            }
+            fg.attributes.color.needsUpdate = true;
           }
-          fg.attributes.color.needsUpdate = true;
-        }
 
-        // 光子累积（note 用帧计数刷新，避免 dt 在高帧率/无头环境下失真）
-        if (P.mode === 'photon') {
-          dropPhotons(60);
-          if (++photonFrame % 15 === 0) refreshNote();
-        }
+          // 光子累积（note 用帧计数刷新，避免 dt 在高帧率/无头环境下失真）
+          if (P.mode === 'photon') {
+            dropPhotons(60);
+            if (++photonFrame % 15 === 0) refreshNote();
+          }
 
-        srcGlow.material.color.copy(lightColor);
-        curve.visible = P.curve;
+          srcGlow.material.color.copy(lightColor);
+          curve.visible = P.curve;
+        });
       },
 
       setParam: function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
         if (key === 'clear') {
           photonCount = 0;
           paintScreen(true);
@@ -323,6 +373,7 @@ HL.registerScene({
       },
 
       dispose: function () {
+        tour.dispose();
         tex.dispose();
       }
     };

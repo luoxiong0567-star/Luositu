@@ -13,6 +13,7 @@ HL.registerScene({
   desc: '由参数方程生成的几何对象。洛伦兹吸引子同时绘制初值仅差 1e-5 的两条轨迹，用于观察确定性系统中的初值敏感性（蝴蝶效应）。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'buttons', key: 'obj', label: '数学对象', value: 'mobius', options: [
       { label: '莫比乌斯带', value: 'mobius' },
       { label: '克莱因瓶', value: 'klein' },
@@ -183,24 +184,71 @@ HL.registerScene({
     camera.position.set(0, 6, 20);
     camera.lookAt(0, 0, 0);
 
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、参数方程的魔法',
+        d: '画面里的一切都由参数方程生成：让两个参数 (u, v) 在一个矩形里滑动，空间中就扫出一张曲面。改变方程的每一个系数，形状随之而变——数学的抽象结构在这里变成可见、可摸的形体。',
+        exp: '拖动「网格密度」滑杆，看曲面从粗糙到光滑。',
+        cam: [[0, 6, 20], [0, 0, 0]],
+        pulse: null
+      },
+      {
+        t: '二、莫比乌斯带',
+        d: '把纸带拧半圈再首尾相接：它只剩一个面、一条边。一只蚂蚁不必越过任何边缘就能爬遍整条带子——「正面」与「反面」在此失去意义。1858 年莫比乌斯与李斯廷各自发现了它；今天它还是回收标志的原型。',
+        exp: '已切到莫比乌斯带。勾选「线框模式」看清扭转的结构。',
+        cam: [[0, 7, 15], [0, 0, 0]],
+        pulse: [0, 0, 0], r: 3,
+        apply: function () { params.obj = 'mobius'; build(); }
+      },
+      {
+        t: '三、克莱因瓶',
+        d: '克莱因瓶没有内外之分：瓶颈「穿过」瓶壁与底部相连，构成一个封闭曲面。但真正的克莱因瓶并不自交——它的完整体必须活在四维空间，我们看到的只是它在三维的投影，就像球穿过桌面时只留下一个圆。',
+        exp: '已切到克莱因瓶。旋转视角找到「瓶颈穿过瓶壁」的那个位置。',
+        cam: [[0, 10, 16], [0, 0, 0]],
+        pulse: [0, 0, 0], r: 3,
+        apply: function () { params.obj = 'klein'; build(); }
+      },
+      {
+        t: '四、马鞍面',
+        d: '双曲抛物面 z = x²/a² − y²/b²：沿 x 方向向上弯、沿 y 方向向下弯，两个主曲率方向相反，高斯曲率为负。薯片的形状就是它——负曲率结构让它异常抗压，这也是双曲几何最直观的模型。',
+        exp: '已切到马鞍面。从正上方俯视（右键拖动），看两个方向的开口。',
+        cam: [[0, 12, 16], [0, 0, 0]],
+        pulse: [0, 0, 0], r: 3,
+        apply: function () { params.obj = 'saddle'; build(); }
+      },
+      {
+        t: '五、洛伦兹吸引子与蝴蝶效应',
+        d: '最后是混沌。洛伦兹 1963 年研究大气对流时简化出的三个方程，画出这只「蝴蝶」。青与金两条轨迹的初值只差 10⁻⁵：起初难分彼此，之后彻底分道扬镳——确定性并不等于可预测。他把这种初值敏感性命名为「蝴蝶效应」。',
+        exp: '已切到洛伦兹吸引子（轨迹已完整画出）。退出讲解后重新选择该对象，可以看两条轨迹从同一出发点逐渐分离的过程。',
+        cam: [[0, 8, 22], [0, 1, 0]],
+        pulse: null,
+        apply: function () { params.obj = 'lorenz'; build(); lorenzStep = 8999; }
+      }
+    ]);
+
     return {
-      update: function (dt) {
-        if (current) {
-          if (params.obj === 'lorenz') {
-            if (lorenzLines) {
-              lorenzStep += dt * 900;
-              var n = Math.min(9000, Math.floor(lorenzStep));
-              lorenzLines.forEach(function (l) { l.geometry.setDrawRange(0, n); });
+      update: function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) {
+          if (current) {
+            if (params.obj === 'lorenz') {
+              if (lorenzLines) {
+                lorenzStep += ddt * 900;
+                var n = Math.min(9000, Math.floor(lorenzStep));
+                lorenzLines.forEach(function (l) { l.geometry.setDrawRange(0, n); });
+              }
+              current.rotation.y += ddt * 0.12;
+            } else if (params.spin) {
+              current.rotation.y += ddt * 0.32;
+              current.rotation.x += ddt * 0.08;
             }
-            current.rotation.y += dt * 0.12;
-          } else if (params.spin) {
-            current.rotation.y += dt * 0.32;
-            current.rotation.x += dt * 0.08;
           }
-        }
+        });
       },
 
       setParam: function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
         params[key] = v;
         if (key === 'obj' || key === 'seg') build();
         if (key === 'wire') applyWire();
@@ -214,6 +262,10 @@ HL.registerScene({
           lorenz: '两条轨迹初值仅相差 1e-5，约 20 秒后完全分离——确定性系统的长期不可预测性。'
         };
         HL.toast(tips[params.obj] || '');
+      },
+
+      dispose: function () {
+        tour.dispose();
       }
     };
   }

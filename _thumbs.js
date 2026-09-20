@@ -25,6 +25,7 @@ const SHOTS = [
   { id: 'photosynthesis', q: '?level=mol' },
   { id: 'maxwell', q: '' },
   { id: 'massenergy', q: '?act=balance' },
+  { id: 'spacetime', q: '?m=light' },
   { id: 'gravity', q: '?g=escape' }
 ];
 

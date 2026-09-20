@@ -14,6 +14,7 @@ HL.registerScene({
   desc: '全连接前馈网络：a⁽ˡ⁾ = f( W⁽ˡ⁾a⁽ˡ⁻¹⁾ + b⁽ˡ⁾ )。光带自输入层向输出层推进，展示信息逐层变换与特征提取的过程。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'buttons', key: 'arch', label: '网络结构', value: 'std', options: [
       { label: '浅层', value: 'shallow' },
       { label: '标准', value: 'std' },
@@ -186,11 +187,57 @@ HL.registerScene({
     var tmpColor = new THREE.Color();
     var ray = new THREE.Raycaster();
 
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    function layerX(i) {
+      return layers[i] && layers[i].nodes[0] ? layers[i].nodes[0].mesh.position.x : 0;
+    }
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、人工神经元',
+        d: '每个球是一个神经元：它把上一层所有输入加权求和，加偏置、过一个激活函数，得到自己的激活值——颜色越暖越亮表示激活越强。这个模型源自 1943 年的麦卡洛克-皮茨神经元，比计算机本身还古老。',
+        exp: '点击任意神经元，看它当前的激活值、偏置与连接数。',
+        cam: [[0, 1.5, 26], [0, 0, 0]],
+        pulse: function () { return { x: layerX(0), y: 0, z: 0 }; }, r: 2.2
+      },
+      {
+        t: '二、权重连线：网络的一切',
+        d: '每条连线是一个权重：暖色（橙）是正权重（激励），冷色（蓝紫）是负权重（抑制），亮度 = |权重| × 上游激活。所谓「训练」，就是用数据一点点调整这些数字——今天的大模型，调整的是上千亿个这样的数。',
+        exp: '取消勾选「显示权重连线」再看一遍前向传播，然后勾回来。',
+        cam: [[0, 2, 14], [0, 0, 0]],
+        pulse: null
+      },
+      {
+        t: '三、前向传播',
+        d: '光带自左向右推进：输入层接收信号，隐藏层逐层变换——通常越靠后的层学到的特征越抽象。直到输出层给出判定（右上角读数显示当前胜出的类别与得分）。深度学习的「深」，指的就是这层层堆叠的非线性变换。',
+        exp: '把「传播速度」拉到 3×，看信号奔跑得更快。',
+        cam: [[0, 4, 20], [0, 0, 0]],
+        pulse: function () { return { x: layerX(layers.length - 1), y: 0, z: 0 }; }, r: 1.8
+      },
+      {
+        t: '四、激活函数：非线性的关键',
+        d: '没有激活函数，再深的网络也只等价于一层线性变换。Sigmoid 把一切压进 (0,1)；tanh 压进 (−1,1)；ReLU 直接砍掉负值——简单粗暴，却是 2012 年之后深度学习爆发的功臣之一。',
+        exp: '已为你切到 ReLU。对比节点亮度分布与 tanh 的差别。',
+        cam: [[0, 2, 16], [0, 0, 0]],
+        pulse: null,
+        apply: function () { params.act = 'relu'; reseedInput(); updateNote(); }
+      },
+      {
+        t: '五、规模的力量',
+        d: '切到「深层」结构：5 → 10 → 12 → 10 → 8 → 4，可训练参数暴涨到上千。2012 年 AlexNet 用 6000 万参数引爆深度学习，如今的大语言模型已达千亿级。而你的大脑：860 亿神经元、约 100 万亿突触——这个画面只是它最粗浅的缩影。',
+        exp: '点「重新随机权重」看不同初始化下的传播差异。',
+        cam: [[0, 3, 24], [0, 0, 0]],
+        pulse: null,
+        apply: function () { params.arch = 'deep'; build(ARCH.deep); }
+      }
+    ]);
+
     return {
-      update: function (dt) {
-        var L = layers.length;
-        wave += dt * params.speed * 1.7;
-        if (wave > L + 1.6) { reseedInput(); updateNote(); }
+      update: function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) {
+          var L = layers.length;
+          wave += ddt * params.speed * 1.7;
+          if (wave > L + 1.6) { reseedInput(); updateNote(); }
 
         // 节点激活
         for (var l = 0; l < L; l++) {
@@ -232,9 +279,11 @@ HL.registerScene({
           ca.needsUpdate = true;
           linkLines.visible = params.links;
         }
+        });
       },
 
       setParam: function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
         if (key === 'arch') { params.arch = v; build(ARCH[v]); return; }
         if (key === 'reseed') { build(ARCH[params.arch]); return; }
         params[key] = v;
@@ -255,6 +304,10 @@ HL.registerScene({
         if (d.layer < L - 1) html += '<div class="tt-row">扇出连接：<b>' + layers[d.layer + 1].n + ' 条</b></div>';
         if (d.layer > 0) html += '<div class="tt-row">扇入连接：<b>' + layers[d.layer - 1].n + ' 条</b></div>';
         HL.tooltip.show(html, ndc.clientX, ndc.clientY);
+      },
+
+      dispose: function () {
+        tour.dispose();
       }
     };
   }

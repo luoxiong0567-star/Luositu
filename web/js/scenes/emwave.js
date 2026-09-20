@@ -14,6 +14,7 @@ HL.registerScene({
   desc: '时变电场激发磁场，时变磁场激发电场，二者相互维持并以光速向外传播。E、B、传播方向 k 三者两两垂直构成右手系；点击画面查看麦克斯韦方程组。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'buttons', key: 'polar', label: '偏振状态', value: 'linear', options: [
       { label: '线偏振', value: 'linear' },
       { label: '圆偏振', value: 'circular' }
@@ -128,10 +129,52 @@ HL.registerScene({
     var _o = new THREE.Vector3(), _d = new THREE.Vector3(), _s = new THREE.Vector3();
     var KHAT = new THREE.Vector3(0, 0, 1);
 
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、电场 E 的振荡',
+        d: '红色箭头是电场 E：沿竖直方向按正弦规律振荡，振幅就是波的强度。但变化的电场不会安分待在原地——法拉第发现变化的磁场生电，麦克斯韦补上了另一半：变化的电场也会激发磁场。二者就这样互相维持着，一起跑了起来。',
+        exp: '右键拖动旋转视角，从侧面与正面分别观察红色 E 箭头的起伏。',
+        cam: [[15, 10, 26], [0, 0, 2]],
+        pulse: null
+      },
+      {
+        t: '二、磁场 B 与右手系',
+        d: '蓝色箭头是磁场 B，方向始终与 E 垂直、也与传播方向 k 垂直——E、B、k 三者构成右手螺旋系。B 的振幅严格等于 E/c：电场强一分，磁场也强一分，两者的能量各占一半。',
+        exp: '可以关掉「电场 E」只看 B，体会它总是在 E 的垂直方向。',
+        cam: [[18, 4, 14], [0, 0, 4]],
+        pulse: [0, 0, 6], r: 2.2
+      },
+      {
+        t: '三、坡印廷矢量：能量流向哪里',
+        d: '金色箭头是坡印廷矢量 S = E×B/μ₀，指向能量流动的方向（+z），长度正比于 E²。波峰处 E 与 B 同时最大，金色箭头也最长。你看见的每一束光，本质上都是这样一束能量在空间中流动。',
+        exp: '关闭「磁场 B」后金色箭头会全部消失——能量流是 E 与 B 共同的产物。',
+        cam: [[8, 12, 20], [0, 0, 0]],
+        pulse: null
+      },
+      {
+        t: '四、波前以光速推进',
+        d: '淡青色的波前平面以光速 c 向前推进。麦克斯韦从方程组里算出 c = 1/√(ε₀μ₀)，发现这个由纯电学、磁学常数算出的速度与实测光速完全一致——他由此断言：光就是电磁波。这是物理学史上最漂亮的统一之一（1865）。',
+        exp: '把「波长 λ」调大，波前间距随之变宽。',
+        cam: [[20, 6, 18], [0, 0, 2]],
+        pulse: null
+      },
+      {
+        t: '五、偏振：光的取向',
+        d: '线偏振光里 E 只在竖直面内振动；切到圆偏振，E 的端点绕传播轴旋转——振幅不变、方向在转。偏振不只在教材里：3D 眼镜、液晶屏、光缆通信、偏振墨镜，都在利用光子的这个「取向」自由度。',
+        exp: '已为你切到圆偏振。注意 E 箭头长度始终不变，只有方向在转。',
+        cam: [[16, 6, 12], [0, 0, 0]],
+        pulse: null,
+        apply: function () { P.polar = 'circular'; }
+      }
+    ]);
+
     return {
-      update: function (dt) {
-        t += dt * P.freq;
-        var k = Math.PI * 2 / P.wl;
+      update: function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) {
+          t += ddt * P.freq;
+          var k = Math.PI * 2 / P.wl;
         var omega = 2.2;
         var cVis = 1.0;
 
@@ -209,9 +252,11 @@ HL.registerScene({
             '<div class="note-row"><span>偏振</span><b>' + (P.polar === 'linear' ? '线偏振' : '圆偏振（左旋）') + '</b></div>'
           );
         }
+        });
       },
 
       setParam: function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
         P[key] = v;
         if (key === 'amp') {
           lbE.position.y = P.amp + 1.4;
@@ -224,6 +269,7 @@ HL.registerScene({
       },
 
       dispose: function () {
+        tour.dispose();
         gShaft.dispose(); gHead.dispose();
         MAT.E.dispose(); MAT.B.dispose(); MAT.S.dispose();
       }

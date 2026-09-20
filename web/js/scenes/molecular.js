@@ -14,6 +14,7 @@ HL.registerScene({
   desc: 'B-DNA：直径 2.0 nm、螺距 3.4 nm、每圈 10.5 个碱基对；α 螺旋：每圈 3.6 个残基、螺距 0.54 nm，由 i→i+4 氢键稳定；β 折叠：链间氢键维系片层。滑动「解旋程度」观察碱基对的打开过程。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'buttons', key: 'mode', label: '分子对象', value: 'dna', options: [
       { label: 'DNA 双螺旋', value: 'dna' },
       { label: 'α 螺旋', value: 'alpha' },
@@ -347,13 +348,67 @@ HL.registerScene({
 
     var ray = new THREE.Raycaster();
 
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、双螺旋：生命的图纸',
+        d: '这就是 B-DNA：两条骨架反向平行地缠绕成右手双螺旋，直径 2.0 nm、螺距 3.4 nm、每圈 10.5 个碱基对。把你一个细胞里的 DNA 接起来约长 2 米，而它装在直径仅 6 μm 的细胞核中。1953 年沃森与克里克提出该结构，关键的 X 射线衍射数据来自罗莎琳德·富兰克林。',
+        exp: '把「单元数量」拉到 60，看一条更长的双螺旋。',
+        cam: [[0, 6, 22], [0, 0, 0]],
+        pulse: null
+      },
+      {
+        t: '二、碱基互补配对',
+        d: '彩色小球是骨架上的碱基：A 只与 T 配对（2 条氢键），G 只与 C 配对（3 条氢键，白色细棒条数更多、更牢固）。这种严格的互补性就是复制的钥匙——任何一条单链，都唯一确定了另一条链的全部信息。',
+        exp: '点击任意碱基，看它的配对关系与氢键数。',
+        cam: [[0, 2, 13], [0, 1, 0]],
+        pulse: [0, 1, 0], r: 2
+      },
+      {
+        t: '三、解旋：复制的开始',
+        d: '细胞分裂前，DNA 从一端开始解开氢键、像拉链一样分开，两条单链各自作为模板合成新链——这叫半保留复制。滑杆「解旋程度」可以亲手拉开这条拉链：上面打开的部分氢键已经断开。',
+        exp: '已为你拉开一半。退出讲解后拖动「解旋程度」滑杆可以合上或全开。',
+        cam: [[6, 4, 14], [0, 2, 0]],
+        pulse: [0, 3.5, 0], r: 2,
+        apply: function () { P.unwind = 0.55; }
+      },
+      {
+        t: '四、α 螺旋：蛋白质的弹簧',
+        d: '换一类分子。α 螺旋是蛋白质最常见的二级结构：每 3.6 个残基绕一圈、螺距 0.54 nm，由第 i 个残基与第 i+4 个之间的氢键（青色细棒）像弹簧一样固定。头发的角蛋白、肌肉里的肌红蛋白，都是它撑起来的。',
+        exp: '点击残基看它的氢键伙伴与侧链性质（疏水 / 极性）。',
+        cam: [[0, 4, 12], [0, 0, 0]],
+        pulse: [0, 0, 0], r: 1.8,
+        apply: function () { P.unwind = 0; P.mode = 'alpha'; build(); }
+      },
+      {
+        t: '五、β 折叠：蛋白质的片层',
+        d: 'β 折叠把肽链拉成锯齿状并排成片，相邻两条链之间用氢键缝合（此处为反平行排列）。丝纤维与蛛丝的高强度正来自这种结构。两端金色箭头指示链的方向：一条 N→C，另一条 C→N，正好相反。',
+        exp: '勾选 / 取消「显示侧链」，看侧链如何交替伸向片层上下两侧。',
+        cam: [[0, 5, 13], [0, 0, 0]],
+        pulse: [0, 0, 0], r: 2,
+        apply: function () { P.mode = 'beta'; build(); }
+      },
+      {
+        t: '六、中心法则',
+        d: 'DNA 携带指令，蛋白质执行生命——从 DNA 到 RNA 再到蛋白质的「中心法则」，是这两类分子在所有细胞中的分工。四种字母（A T G C）写下 30 亿碱基对的人类基因组，编码约两万个基因，最终构成你身体里的每一个细胞。',
+        exp: '按 R 复位视角，回看整个分子家族。',
+        cam: [[0, 8, 24], [0, 0, 0]],
+        pulse: null,
+        apply: function () { P.mode = 'dna'; P.unwind = 0; build(); }
+      }
+    ]);
+
     return {
-      update: function (dt) {
-        if (P.spin) root.rotation.y += dt * 0.28;
-        refresh();
+      update: function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) {
+          if (P.spin) root.rotation.y += ddt * 0.28;
+          refresh();
+        });
       },
 
       setParam: function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
         P[key] = v;
         if (key === 'mode' || key === 'n') build();
       },
@@ -372,6 +427,7 @@ HL.registerScene({
       },
 
       dispose: function () {
+        tour.dispose();
         G.sphere.dispose(); G.cyl.dispose(); G.cone.dispose();
         Object.keys(MATS).forEach(function (k) { MATS[k].dispose(); });
       }

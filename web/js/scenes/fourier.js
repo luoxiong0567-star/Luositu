@@ -14,6 +14,7 @@ HL.registerScene({
   desc: '任意周期函数可分解为正弦谐波之和。方波仅含奇次谐波，系数按 1/n 衰减；三角波按 1/n² 衰减，收敛更快。跳变点附近的过冲（吉布斯现象）稳定在约 9%，不会随项数增多而消失。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'buttons', key: 'wave', label: '目标波形', value: 'square', options: [
       { label: '方波', value: 'square' },
       { label: '锯齿波', value: 'saw' },
@@ -222,10 +223,57 @@ HL.registerScene({
     var ray = new THREE.Raycaster();
     ray.params.Line.threshold = 0.22;
 
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、目标与合成',
+        d: '白色细线是目标——理想方波；金色亮带是合成波——有限个正弦谐波的叠加。傅里叶 1807 年的断言：任何周期函数都能这样被正弦之和逼近。两者之间的差距，就藏在「还差多少个谐波」里。',
+        exp: '右键拖动旋转视角，从前方看合成波，从侧后方看谐波队列。',
+        cam: [[2, 7, 26], [0, 0, -4]],
+        pulse: null
+      },
+      {
+        t: '二、谐波家族',
+        d: '向后排列的每条青色曲线是一个谐波：第 1 个是基频，之后全是奇数次（3、5、7…），振幅按 1/n 递减——方波里没有偶次谐波，因为它关于横轴对称。每条线的颜色由青渐变到金，标记次数的升高。',
+        exp: '点击任意一条谐波曲线，看它的次数、振幅系数与频率比。',
+        cam: [[2, 13, 8], [0, 0, -9]],
+        pulse: [0, 0, -4], r: 2.5
+      },
+      {
+        t: '三、项数逼近',
+        d: '拖动「谐波项数 N」：加上第 3、第 5、第 7 个谐波，合成波逐级贴合方波，右上角 RMS 误差单调下降。傅里叶级数不是魔法，而是一个可以逐项验证的收敛过程。',
+        exp: '退出讲解后把 N 从 1 拖到 20，看波形逐级逼近；勾选「自动扫描项数」交给动画。',
+        cam: [[2, 6, 18], [0, 0, -2]],
+        pulse: null
+      },
+      {
+        t: '四、吉布斯现象',
+        d: '把 N 拉满到 40：跳变处的「小耳朵」依然存在——这是吉布斯过冲，稳定在约 9%，永远不会随项数增多而消失。无穷级数在跳变点只能「平均收敛」，无法「点点收敛」——1899 年吉布斯给出了这个证明。',
+        exp: '已为你切到 40 项。注意两个过冲尖峰的高度不再随项数变化。',
+        cam: [[2, 5, 14], [0, 0, 0]],
+        pulse: null,
+        apply: function () { P.auto = false; P.N = 40; }
+      },
+      {
+        t: '五、无处不在的傅里叶',
+        d: '换锯齿波看 1/n 的慢衰减，换三角波看 1/n² 的快收敛。你每听一次 mp3、每看一张 jpg，都是把信号变到频域、砍掉听不见 / 看不见的谐波再变回来——傅里叶分析是整个数字世界的地基。',
+        exp: '已为你切到三角波。对比方波：同样项数下它贴合得多快。',
+        cam: [[2, 7, 24], [0, 0, -4]],
+        pulse: null,
+        apply: function () { P.wave = 'triangle'; refreshFormula(); }
+      }
+    ]);
+
     return {
-      update: update,
+      update: function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) {
+          update(ddt);
+        });
+      },
 
       setParam: function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
         P[key] = v;
         if (key === 'wave') refreshFormula();
       },
@@ -242,6 +290,10 @@ HL.registerScene({
         html += '<div class="tt-row">频率比：<b>' + t.n + ' × f₀</b></div>';
         html += '<div class="tt-row">相位：<b>0</b></div>';
         HL.tooltip.show(html, ndc.clientX, ndc.clientY);
+      },
+
+      dispose: function () {
+        tour.dispose();
       }
     };
   }

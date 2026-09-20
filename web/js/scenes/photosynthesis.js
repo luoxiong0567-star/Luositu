@@ -18,6 +18,7 @@ HL.registerScene({
   desc: 'C3 植物叶片的三级可视化：叶片横截面 → 叶绿体 → 类囊体膜分子机器。内核为 Farquhar–von Caemmerer–Berry 光合模型，实时求解 Rubisco 羧化限制与 RuBP 再生限制的较小者，并给出 O₂、ATP、NADPH、糖的计量关系与限制因子。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'buttons', key: 'level', label: '观察层级', value: 'leaf', options: [
       { label: '叶片', value: 'leaf' },
       { label: '叶绿体', value: 'chloro' },
@@ -1196,25 +1197,28 @@ HL.registerScene({
     refreshHud();
     syncLevelUI();
 
-    return {
-      update: function (dt) {
-        tAll += dt;
-        solve(dt);
-        updateNav(dt);
-        applyLod();
+    var api = {
+      update: function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) {
+          tAll += ddt;
+          solve(ddt);
+          updateNav(ddt);
+          applyLod();
 
-        var lvl = nav.level;
-        if (P.flow) {
-          if (lvl === 'leaf') updateLeaf(dt);
-          else if (lvl === 'chloro') updateChloro(dt);
-          else updateMol(dt);
-        }
-        Object.keys(L[lvl].pools).forEach(function (k) { L[lvl].pools[k].update(dt); });
+          var lvl = nav.level;
+          if (P.flow) {
+            if (lvl === 'leaf') updateLeaf(ddt);
+            else if (lvl === 'chloro') updateChloro(ddt);
+            else updateMol(ddt);
+          }
+          Object.keys(L[lvl].pools).forEach(function (k) { L[lvl].pools[k].update(ddt); });
 
-        if (++hudFrame % 8 === 0) refreshHud();
+          if (++hudFrame % 8 === 0) refreshHud();
+        });
       },
 
       setParam: function (k, v) {
+        if (k === 'tour') { tour.toggle(); return; }
         if (k === 'level') { P.level = v; gotoLevel(v); return; }
         if (k === 'back') {
           var i = ORDER.indexOf(nav.level);
@@ -1255,9 +1259,77 @@ HL.registerScene({
       },
 
       dispose: function () {
+        tour.dispose();
         if (fadeEl.parentNode) fadeEl.parentNode.removeChild(fadeEl);
         if (badge.parentNode) badge.parentNode.removeChild(badge);
       }
     };
+
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    /** 讲解中的层级切换：不走渐隐动画（讲解相机由引擎接管），直接显隐 */
+    function gotoTour(id) {
+      P.autoLod = false;
+      if (nav.level !== id) {
+        nav.level = id; P.level = id;
+        showLevel(id); syncLevelUI(); applyLabels();
+      }
+    }
+    function sphCam(lv) {
+      var hm = LV[lv].home, tg = LV[lv].tgt;
+      var v = new THREE.Vector3().setFromSpherical(new THREE.Spherical(hm.r, hm.ph, hm.th)).add(tg);
+      return [[v.x, v.y, v.z], [tg.x, tg.y, tg.z]];
+    }
+
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、叶片：光合作用的工厂',
+        d: '从一片叶子的横截面开始：上表皮排列着栅栏组织，下表皮布满气孔——CO₂ 从这里进入，水从导管送来。叶肉细胞里一颗颗绿色椭圆体就是叶绿体，一座座直径约 5 μm 的太阳能工厂。一片叶子里的叶绿体，数以千万计。',
+        exp: '点击叶面上的结构可看它的功能说明。',
+        cam: sphCam('leaf'),
+        pulse: null,
+        apply: function () { gotoTour('leaf'); }
+      },
+      {
+        t: '二、叶绿体：捕获光能的细胞器',
+        d: '深入一颗叶绿体：外面包着双层被膜，内部悬浮着一叠叠绿色的「基粒」——每张薄片都是一层压扁的囊泡（类囊体），膜上镶嵌着捕光蛋白。20 亿年前，一类蓝细菌被真核细胞吞入并定居下来，变成叶绿体——这次「内共生」让地球从此披上绿色。',
+        exp: '已为你深入叶绿体。注意基粒像一摞摞硬币。',
+        cam: sphCam('chloro'),
+        pulse: null,
+        apply: function () { gotoTour('chloro'); }
+      },
+      {
+        t: '三、分子机器：类囊体膜上的流水线',
+        d: '再放大一万倍，来到类囊体膜：四台巨大的分子机器排成一条流水线——PSII（光系统Ⅱ）撕开水分子放出 O₂，b6f 像泵一样搬运质子，PSI 给电子补充能量，最右侧的 ATP 合酶则利用质子洪流旋转合成 ATP——每转一圈产出 3 个 ATP。',
+        exp: '已为你切到分子层。点击各机器可看分工说明。',
+        cam: sphCam('mol'),
+        pulse: [0.8, 2.8, -600], r: 6,
+        apply: function () { gotoTour('mol'); }
+      },
+      {
+        t: '四、光反应：水被拆开的那一刻',
+        d: '光子（暖黄粒子）打在 PSII 上，拽出高能电子；电子沿传递链一路跌落，能量被用来把 H⁺ 泵进囊内，形成质子梯度——像给水坝蓄水。水被拆开补上失去的电子，同时放出 O₂：你呼吸的每一口氧气都来自这条反应。叶绿素偏爱的红光（约 660 nm）效率最高。',
+        exp: '退出后把「光谱波长」从 660 调到 450，看 ATP / NADPH 产量明显下降。',
+        cam: [[3, 6, -594], [0.8, 2.8, -600]],
+        pulse: null
+      },
+      {
+        t: '五、卡尔文循环：把空气变成糖',
+        d: '膜外基质中进行着卡尔文循环：Rubisco——地球上含量最丰富的蛋白质——抓住 CO₂ 接到五碳糖上，用 ATP 与 NADPH 的能量一步步还原，每固定 3 个 CO₂ 产出 1 个 G3P。植物每年用这个循环固定约 1200 亿吨碳，养活几乎所有生命。',
+        exp: '拖「CO₂ 浓度」从 420 降到 80 ppm，看糖产量怎样塌下去。',
+        cam: [[-4, 4, -592], [0.8, 2.8, -600]],
+        pulse: null
+      },
+      {
+        t: '六、状态机：植物如何应对世界',
+        d: '这个场景内嵌了真实的光合生理模型（FvCB）：黑暗中产量归零；缺水时气孔关闭、CO₂ 断供；高温让酶失活；强光下光呼吸与光抑制启动。植物没有大脑，却用一套化学反馈应对昼夜、旱涝与四季——右上角徽章显示当前状态。',
+        exp: '把「光照强度 PPFD」拉到 0（黑夜）、「温度」拉到 45 ℃，看状态徽章切换。',
+        cam: sphCam('leaf'),
+        pulse: null,
+        apply: function () { gotoTour('leaf'); P.autoLod = true; }
+      }
+    ]);
+
+    return api;
   }
 });

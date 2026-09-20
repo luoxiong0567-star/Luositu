@@ -14,6 +14,7 @@ HL.registerScene({
   desc: '118 种元素按周期与族排布，颜色区分类别。切换布局可观察原子序数的连续性与相对原子质量的增长趋势。点击任一元素查看细节，并在右侧玻璃样品舱中按真实熔点/沸点呈现气 / 液 / 固三态。',
 
   controls: [
+    { type: 'button', key: 'tour', label: '📖 讲解模式' },
     { type: 'buttons', key: 'mode', label: '布局方式', value: 'table', options: [
       { label: '周期表', value: 'table' },
       { label: '螺旋', value: 'spiral' },
@@ -208,23 +209,26 @@ HL.registerScene({
     }
     ctx.canvas.addEventListener('pointermove', onMove);
 
-    return {
+    var api = {
       update: function (dt, time) {
-        var k = 1 - Math.pow(0.001, dt);           // 与帧率无关的插值系数
-        blocks.forEach(function (b) {
-          b.mesh.position.lerp(b.target, k);
-        });
-        var spin = params.autoRotate ? 0.22 : 0.06;
-        atomRoot.rotation.y += dt * spin;
-        atomRoot.rotation.x += dt * spin * 0.25;
-        atomRoot.visible = params.atom;
-        ctx.controls.autoRotate = params.autoRotate && params.mode !== 'table';
+        tour.update(dt, time || 0, function (ddt, dtime) {
+          var k = 1 - Math.pow(0.001, ddt);           // 与帧率无关的插值系数
+          blocks.forEach(function (b) {
+            b.mesh.position.lerp(b.target, k);
+          });
+          var spin = params.autoRotate ? 0.22 : 0.06;
+          atomRoot.rotation.y += ddt * spin;
+          atomRoot.rotation.x += ddt * spin * 0.25;
+          atomRoot.visible = params.atom;
+          ctx.controls.autoRotate = params.autoRotate && params.mode !== 'table' && !tour.active();
 
-        chamber.update(dt, time || 0);
-        if (chHint.visible) chHint.material.opacity = 0.55 + 0.35 * Math.sin((time || 0) * 2.2);
+          chamber.update(ddt, dtime);
+          if (chHint.visible) chHint.material.opacity = 0.55 + 0.35 * Math.sin((dtime || 0) * 2.2);
+        });
       },
 
       setParam: function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
         params[key] = v;
         if (key === 'logT') chamber.setTemperature(Math.pow(10, v));
         if (key === 'refract') chamber.setRefract(v);
@@ -270,10 +274,75 @@ HL.registerScene({
       },
 
       dispose: function () {
+        tour.dispose();
         ctx.canvas.removeEventListener('pointermove', onMove);
         chamber.dispose();
       }
     };
+
+    /* ---------- 讲解模式（HL.Tour 框架引擎） ---------- */
+    /** 讲解中场景被冻结（dt=0），布局切换需要瞬移到位 */
+    function snapBlocks() {
+      blocks.forEach(function (b) { b.mesh.position.copy(b.target); });
+    }
+
+    var tour = HL.Tour(ctx);
+    tour.load([
+      {
+        t: '一、周期表的形状',
+        d: '118 种元素排成 7 行 × 18 列：行是周期（电子层数），列是族（最外层电子数）。颜色标注类别——左下方大片是金属，右上角一小块是非金属，最右一列是不与任何人反应的稀有气体。这张表挂在全世界每一间化学教室的墙上。',
+        exp: '左键拖动平移、右键旋转，从斜侧方看这面「墙」。',
+        cam: [[6, 2, 32], [1.9, 0, 0]],
+        pulse: null
+      },
+      {
+        t: '二、门捷列夫的预言',
+        d: '1869 年门捷列夫按原子量排列当时已知的 63 种元素，发现性质周期性重现，于是大胆留出空位、预言「类铝」「类硅」的原子量与密度——后来的镓与锗，性质几乎分毫不差。周期表从此不再是经验的堆砌，而是有预言力的定律。其真正原因要到 50 年后量子力学才揭晓：周期律的本质是电子的分层排布。',
+        exp: '点击第 31、32 号（镓、锗），看它们的位置与性质。',
+        cam: [[4, 1, 22], [4, 0.2, 0]],
+        pulse: null
+      },
+      {
+        t: '三、螺旋布局：一条连续的线',
+        d: '切到「螺旋」：原子序数 1 → 118 连成一条上升的螺旋线，碱金属与稀有气体恰好落在同一相位上。这提醒你周期表的本质不是一张表格，而是原子序数 Z 这条连续不断的线——元素一个不多、一个不少。',
+        exp: '已为你切到螺旋布局。右键拖动沿螺旋走一圈。',
+        cam: [[0, 4, 30], [0, 0, 0]],
+        pulse: null,
+        apply: function () { api.setParam('mode', 'spiral'); snapBlocks(); }
+      },
+      {
+        t: '四、质量地形',
+        d: '「质量地形」把相对原子质量变成高度：前 26 号平缓爬升，随后出现同位素造成的台阶；下方两条「重元素带」是镧系（57–71）与锕系（89–103）——它们塞不进主表，被拉出来单独放两行。整个宇宙中天然存在的元素到 94 号钚为止。',
+        exp: '已为你切到质量地形。注意每一「楼层」的高度就是原子量。',
+        cam: [[0, 9, 26], [0, -2, 0]],
+        pulse: null,
+        apply: function () { api.setParam('mode', 'mass'); snapBlocks(); }
+      },
+      {
+        t: '五、玻璃样品舱：亲手触摸元素',
+        d: '回到表格布局。点击任意元素，右侧升起一只玻璃样品舱：按该元素真实的熔点与沸点呈现气（粒子布朗飞散）、液（波动液面）、固（晶格球棍）三态。拖动温度滑杆，能看它在 3000 K 熔化、5000 K 沸腾。',
+        exp: '已为你放入铁（Fe）样品，当前 300 K 呈固态。退出后拖「温度 log₁₀(T/K)」滑杆：越过 1811 K 看它熔化。',
+        cam: [[6, 3, 16], [9, 1, 0]],
+        pulse: [13.1, 1.3, 0], r: 2.8,
+        apply: function () {
+          api.setParam('mode', 'table'); snapBlocks();
+          chamber.setElement(HL.ELEMENTS[25]);
+          chamber.setTemperature(Math.pow(10, params.logT));
+          chamber.setVisible(true);
+          chHint.visible = false;
+        }
+      },
+      {
+        t: '六、壳层模型：周期表的骨架',
+        d: '左下角是选中元素的壳层模型：核外电子按 2、8、18……分层填充，元素的化学性质几乎完全由最外层电子决定——这正是周期表「列」的含义。到 118 号 Og 为止，其中 95 号镅之后的元素全部只能在实验室中合成，存活不过几秒到几天。',
+        exp: '退出讲解后点击不同主族的元素，对比它们的壳层数与最外层电子数。',
+        cam: [[10, -4.5, 13], [13.4, -6.1, 0]],
+        pulse: [13.4, -6.1, 0], r: 3,
+        apply: function () { if (params.atom) buildAtom(6); }
+      }
+    ]);
+
+    return api;
   }
 });
 

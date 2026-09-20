@@ -691,6 +691,7 @@
     maxDistance: 400,
 
     controls: [
+      { type: 'button', key: 'tour', label: '📖 讲解模式' },
       {
         type: 'buttons', key: 'act', label: '模块',
         options: [
@@ -1728,6 +1729,65 @@
           api.render = null;
         }
       };
+
+      /* ==============================================================
+         讲解模式（HL.Tour 框架引擎）
+         ============================================================== */
+      var tour = HL.Tour(ctx);
+      tour.load([
+        {
+          t: '一、E = mc²：质量的价签',
+          d: '这台天平左边是质量、右边是能量。爱因斯坦 1905 年的狭义相对论告诉我们：质量与能量是同一件事的两种度量，兑换汇率是 c² ≈ 9×10¹⁶。哪怕 1 克物质，也相当于 89.9 太焦耳——约 2.1 万吨 TNT，或一座城市一天的用电。',
+          exp: '退出讲解后拖「质量 log₁₀(m/kg)」滑杆，看右侧换算数字飙升。',
+          cam: [[0, 4.8, 27.0], [1.2, 2.6, 0]],
+          pulse: null
+        },
+        {
+          t: '二、湮灭：100% 的质能转换',
+          d: '微观展区。正电子与电子相遇，静质量全部消失，变成两颗反向飞出的光子——1.022 MeV，一分不差。这是已知唯一的 100% 质能转换过程；反物质是宇宙中最贵的「燃料」，人工制成 1 克需要的天文数字能源远超其释放的能量。',
+          exp: '已为你切到「微观 · 湮灭」。点击画面可重播反应。',
+          cam: [[0, 3.2, 25.0], [1.2, 2.4, 0]],
+          pulse: [1.2, 2.4, 0], r: 3,
+          apply: function () { setAct('micro'); P.rxn = 'annih'; mT = 0; fly.active = false; refreshCard(); }
+        },
+        {
+          t: '三、裂变：拆开原子核',
+          d: '一颗中子撞进铀-235，核振荡成哑铃状、断裂成钡与氪，释放 3 颗新中子与约 173 MeV（瞬发）。产物的静质量加起来比反应前少了约 0.19%——这 0.19% 就是核电站与原子弹的全部能量来源。1 千克铀-235 完全裂变 ≈ 2700 吨标准煤。',
+          exp: '已为你切到「裂变」。注意红色标记的质量亏损 Δm 与释放的 Q 值。',
+          cam: [[0, 3.2, 25.0], [1.2, 2.4, 0]],
+          pulse: [1.2, 2.4, 0], r: 3,
+          apply: function () { setAct('micro'); P.rxn = 'fission'; mT = 0; fly.active = false; refreshCard(); }
+        },
+        {
+          t: '四、聚变：恒星的心跳',
+          d: '氘与氚聚合成氦-4，甩出一颗中子，释放 17.6 MeV——按质量占比算，是裂变的 4 倍多。聚变需要上千万度克服库仑斥力，所以它只能在恒星 core 里持续燃烧，也是氢弹与「人造太阳」托卡马克的原理。海水中的氘足够人类用上亿年。',
+          exp: '已为你切到「聚变」。对比裂变：单位质量的能量更高。',
+          cam: [[0, 3.2, 25.0], [1.2, 2.4, 0]],
+          pulse: [1.2, 2.4, 0], r: 3,
+          apply: function () { setAct('micro'); P.rxn = 'fusion'; mT = 0; fly.active = false; refreshCard(); }
+        },
+        {
+          t: '五、太阳：一场烧了 46 亿年的燃烧',
+          d: '宏观展区。太阳每秒把 426 万吨质量变成光——相当于每秒引爆约 6×10⁷ 颗广岛原子弹，而你感受到的只是温暖的 1/22 亿（剩下的都撒向了空旷的太阳系）。堆成太阳同等能量需要烧掉 1.5×10¹⁸ 吨标准煤：按它的质量，太阳还能再烧 50 亿年。',
+          exp: '已为你切到「宏观」。拖「时间尺度」滑杆压缩 46 亿年。',
+          cam: [[0, 3.2, 31.0], [2.8, 1.4, 0]],
+          pulse: [2.8, 1.4, 0], r: 3,
+          apply: function () { setAct('macro'); fly.active = false; }
+        }
+      ]);
+
+      var _upd = api.update;
+      // 讲解时场景不冻结（反应动画继续播放更有表现力），相机由讲解引擎接管（fly 已禁用）
+      api.update = function (dt, tt) {
+        tour.update(dt, tt || 0, function (ddt) { _upd(tour.active() ? dt : ddt); });
+      };
+      var _spd = api.setParam;
+      api.setParam = function (key, v) {
+        if (key === 'tour') { tour.toggle(); return; }
+        _spd(key, v);
+      };
+      var _sdp = api.dispose;
+      api.dispose = function () { tour.dispose(); _sdp(); };
 
       camera.position.set(0, 5.4, 25.5);
       controls.target.set(0, 3.2, 0);
