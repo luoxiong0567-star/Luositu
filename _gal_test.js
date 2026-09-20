@@ -68,6 +68,8 @@ function httpReq(url, method) {
       subs: Array.prototype.map.call(document.querySelectorAll('#sceneList .scene-chapter span'), function(e){return e.textContent;}),
       items: document.querySelectorAll('#sceneList .scene-item').length,
       cards: g ? g.querySelectorAll('.gal-card').length : -1,
+      galCh: g ? g.querySelectorAll('.gal-chapter').length : -1,
+      galGrid: g ? g.querySelectorAll('.gal-grid').length : -1,
       active: (document.querySelector('#sceneList .scene-item.active')||{}).datasetId || (function(){var a=document.querySelector('#sceneList .scene-item.active');return a?a.dataset.id:'';})()
     };
   })())`;
@@ -78,9 +80,11 @@ function httpReq(url, method) {
   const a = await evalx(probe) || {};
   const expectCh = ['Ⅰ · 宇宙的法则', 'Ⅱ · 物质的语言', 'Ⅲ · 规律的抽象', 'Ⅳ · 思维的光芒'];
   const okA = a.galShow && a.sbW >= 200 && a.cards === 12 && a.items === 12 &&
+    a.galCh === 0 && a.galGrid === 1 &&
     JSON.stringify(a.chapters) === JSON.stringify(expectCh);
   log('── 首页侧栏+四章   ' + (okA ? 'PASS' : 'FAIL') + '  sidebarW=' + a.sbW + ' cards=' + a.cards +
-    ' items=' + a.items + ' 章=' + JSON.stringify(a.chapters) + (errors.length ? '  !! ' + errors[0] : ''));
+    ' 目录页分组标题=' + a.galCh + ' 网格=' + a.galGrid + ' items=' + a.items +
+    ' 章=' + JSON.stringify(a.chapters) + (errors.length ? '  !! ' + errors[0] : ''));
   if (!okA) bad++;
   log('   分组副标题: ' + JSON.stringify(a.subs));
 

@@ -403,7 +403,7 @@ input[type=range]::-webkit-slider-thumb {
 .gal-ch-sub{font-size:11.5px;color:#6f819c;letter-spacing:1.5px;}
 .gal-foot{padding:26px 40px 42px;text-align:center;font-size:13px;letter-spacing:2px;color:#7d93b3;
   text-shadow:0 0 12px rgba(77,226,255,.25);}
-.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;padding:22px 40px 44px;align-content:start;flex:1;}
+.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;padding:20px 40px 6px;align-content:start;flex:1;}
 .gal-card{position:relative;border:1px solid rgba(77,226,255,.16);border-radius:12px;overflow:hidden;cursor:pointer;
   background:linear-gradient(180deg,rgba(16,24,40,.92),rgba(8,12,22,.95));
   transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}

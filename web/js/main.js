@@ -223,15 +223,13 @@
     var cn = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
       '十一', '十二', '十三', '十四', '十五', '十六'][total] || ('' + total);
     var html = '<div class="gal-head"><h2>✦ 人类之光 · 场景目录</h2>' +
-      '<p>' + cn + '个三维科学可视化场景 · 四章之旅 · 点击卡片进入 · Esc 返回目录 · 作者 罗司徒</p></div>';
+      '<p>' + cn + '个三维科学可视化场景 · 点击卡片进入 · Esc 返回目录 · 作者 罗司徒</p></div>';
     var cards = [];
-    var used = {};
 
     function keyOf(i) {
       return i < 9 ? String(i + 1) : (['0', '-', '='][i - 9] || '');
     }
     function addCard(def, i) {
-      used[def.id] = true;
       var key = keyOf(i);
       html += '<div class="gal-card" data-id="' + def.id + '" title="快捷键 ' + key + '">' +
         '<div class="gal-img"></div>' +
@@ -240,20 +238,10 @@
       cards.push({ id: def.id, thumb: thumbs[def.id] });
     }
 
-    CHAPTERS.forEach(function (ch) {
-      html += '<div class="gal-chapter"><span class="gal-ch-name">' + ch.name + '</span>' +
-        '<span class="gal-ch-sub">' + ch.sub + '</span></div><div class="gal-grid">';
-      // 按章节叙事顺序输出（ch.ids 顺序），与侧栏分组一致
-      ch.ids.forEach(function (id) {
-        var def = HL.getScene(id);
-        if (def) addCard(def, all.indexOf(def));
-      });
-      html += '</div>';
-    });
-    // 未归章场景兜底（防止新增场景遗漏）
-    all.forEach(function (def, i) {
-      if (!used[def.id]) addCard(def, i);
-    });
+    // 首页右侧扁平化：全部场景一张网格，不分组（四章分组只保留在左侧目录栏）
+    html += '<div class="gal-grid">';
+    all.forEach(function (def, i) { addCard(def, i); });
+    html += '</div>';
     html += '<div class="gal-foot">宇宙用数学写就，而人类学会了阅读 —— 既仰望星空，也凝视自身</div>';
     galleryEl.innerHTML = html;
     // 缩略图用 DOM API 注入（避免 innerHTML 拼接 src 触发构建脚本的内联校验误报）
