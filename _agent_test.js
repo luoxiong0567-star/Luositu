@@ -112,8 +112,17 @@ function httpReq(u, m) {
       canvas: canvas,
       txtHead: txt.slice(0, 120),
       slim: slim,
-      hasOps: txt.indexOf('AGENT OPS') >= 0 || txt.indexOf('调度中心') >= 0,
-      hasAgents: txt.indexOf('AGENT') >= 0,
+      hasOps: txt.indexOf('神经网络思维调用展示') >= 0 && txt.indexOf('AI-Agent') >= 0,
+      hasAgents: txt.indexOf('AGENT') >= 0 || txt.indexOf('Agent') >= 0,
+      /* 单主题化：不应再有任何主题切换入口 */
+      noSpiderHost: !(d && d.getElementById('host-spider')),
+      noPicker: !(d && d.getElementById('picker')),
+      seriesBtns: (function(){
+        try { return (d && d.getElementById('host-ops').shadowRoot)
+          ? d.getElementById('host-ops').shadowRoot.querySelectorAll('[data-series-pick]').length : -1; }
+        catch(e) { return -1; }
+      })(),
+      spiderTpl: !!(d && d.getElementById('tpl-spider')),
       stageEmbed: document.getElementById('stage').classList.contains('embed-mode'),
       activeItem: (function(){var e=document.querySelector('#sceneList .scene-item.active');return e?e.dataset.id:'';})(),
       sidebarItems: document.querySelectorAll('#sceneList .scene-item').length,
@@ -129,17 +138,20 @@ function httpReq(u, m) {
   })())`) || {};
 
   const s2 = a.slim || {};
-  const okA = a.hasWrap && a.iframeCount === 1 && a.srcdocLen > 100000 &&
-    a.docNodes > 20 && a.shadowNodes > 100 && a.title.indexOf('Agent') >= 0 &&
+  const okA = a.hasWrap && a.iframeCount === 1 && a.srcdocLen > 40000 &&
+    a.docNodes >= 10 && a.shadowNodes > 100 && a.title.indexOf('Agent') >= 0 &&
     a.hasOps && s2.appW > 600 && s2.appH > 400 &&
     s2.agents >= 10 && s2.feed >= 5 && s2.cells >= 5 &&
+    a.noSpiderHost && a.noPicker && a.seriesBtns === 0 && a.spiderTpl === false &&
     a.stageEmbed === true && a.activeItem === 'aiagent' && a.sidebarItems === 13;
   log('── 直达 #aiagent    ' + (okA ? 'PASS' : 'FAIL') +
     '  srcdoc=' + Math.round((a.srcdocLen || 0) / 1024) + 'KB' +
     ' shadowNodes=' + a.shadowNodes + ' app=' + s2.appW + '×' + s2.appH +
     ' agents=' + s2.agents + ' feed=' + s2.feed + ' cells=' + s2.cells +
     ' canvas=' + s2.canvases);
-  log('   页面标题: ' + (a.txtHead || '').slice(0, 60));
+  log('   页面标题: ' + (a.txtHead || '').slice(0, 60) + '  docNodes=' + a.docNodes + ' hasWrap=' + a.hasWrap);
+  log('   单主题化: spiderHost=' + !a.noSpiderHost + ' picker=' + !a.noPicker +
+    ' seriesBtn=' + a.seriesBtns + ' spiderTpl=' + a.spiderTpl);
   if (!okA) bad++;
 
   /* ---------- B. 第四章归属 ---------- */
