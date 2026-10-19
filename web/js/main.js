@@ -47,10 +47,18 @@
       else if (k === '0') idx = 9;          // 0 → 第 10 个
       else if (k === '-') idx = 10;         // - → 第 11 个
       else if (k === '=') idx = 11;         // = → 第 12 个
+      else if (k === 'q') idx = 12;         // q → 第 13 个
       if (idx >= 0) {
         var list = HL.allScenes();
         if (list[idx]) load(list[idx].id);
       }
+    });
+
+    // 内嵌页面（iframe）内的 Esc 由页面 postMessage 转发，行为与主界面一致
+    window.addEventListener('message', function (e) {
+      if (!e.data || e.data.hlEmbed !== 'esc') return;
+      if (galleryEl && galleryEl.classList.contains('show')) return;
+      showGallery();
     });
 
     // 点击空白处收起提示
@@ -203,7 +211,8 @@
     photosynthesis: '叶片 → 叶绿体 → 分子三级缩放，光反应与卡尔文循环',
     maxwell: '四区全景：高斯电 / 磁通量、法拉第感应与位移电流',
     massenergy: '质量—能量天平、湮灭 / 裂变 / 聚变微观动画、太阳 vs 煤球',
-    gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度'
+    gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度',
+    aiagent: '11 个 AI 智能体的实时调度大屏：任务流、检索评审、成本与派发队列'
   };
   var galleryEl;
 
@@ -212,7 +221,7 @@
     { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
     { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 生命之光', ids: ['periodic', 'molecule', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
-    { name: 'Ⅳ · 思维的光芒', sub: '认识自己的大脑', ids: ['neural'] }
+    { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体', ids: ['neural', 'aiagent'] }
   ];
 
   function buildGallery() {
@@ -227,7 +236,7 @@
     var cards = [];
 
     function keyOf(i) {
-      return i < 9 ? String(i + 1) : (['0', '-', '='][i - 9] || '');
+      return i < 9 ? String(i + 1) : (['0', '-', '=', 'q'][i - 9] || '');
     }
     function addCard(def, i) {
       var key = keyOf(i);

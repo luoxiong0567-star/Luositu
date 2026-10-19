@@ -1,4 +1,4 @@
-// T1 全量验证：13 场景讲解模式 + 四章目录页 + 时空弯曲物理读数 + 截图
+// 全量验证：12 个 3D 场景讲解模式 + 四章目录页（内嵌页面场景 aiagent 无讲解模式，由 _agent_test.js 单独覆盖）
 const { execFile } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -9,7 +9,7 @@ const ROOT = 'C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light';
 const PORT = 9451;
 const URL_BASE = 'file:///C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light/web/index.html';
 
-// 12 个场景（registration 顺序）
+// 12 个 3D 场景（registration 顺序；aiagent 为内嵌页面，不参与讲解模式回归）
 const SCENES = ['solar', 'periodic', 'neural', 'math', 'interference', 'molecule',
   'fourier', 'emwave', 'photosynthesis', 'maxwell', 'massenergy', 'gravity'];
 
@@ -118,7 +118,7 @@ function httpReq(url, method) {
     await r.close();
   }
 
-  /* ---------- B. 四章目录页 ---------- */
+  /* ---------- B. 目录页（卡片平铺 + 13 场景） ---------- */
   {
     const r = await open(URL_BASE + '?_t=' + Date.now(), 3500);
     const v = await r.evalx(`(function(){
@@ -132,9 +132,9 @@ function httpReq(url, method) {
         foot: g ? (g.querySelector('.gal-foot')||{}).textContent || '' : ''
       });
     })()`) || {};
-    const ok = v.show && v.chapters === 4 && v.cards === 12 && v.imgs >= 12 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
+    const ok = v.show && v.chapters === 0 && v.cards === 13 && v.imgs >= 13 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
     if (!ok) bad++;
-    log('── 目录页四章       ' + (ok ? 'PASS' : 'FAIL') + '  chapters=' + v.chapters + ' cards=' + v.cards + ' imgs=' + v.imgs +
+    log('── 目录页平铺       ' + (ok ? 'PASS' : 'FAIL') + '  分组标题=' + v.chapters + ' cards=' + v.cards + ' imgs=' + v.imgs +
       ' [' + (v.chNames || []).join(' | ') + ']' + (r.errors.length ? ' !! ' + r.errors[0] : ''));
     await r.close();
   }

@@ -25,7 +25,8 @@ const SHOTS = [
   { id: 'photosynthesis', q: '?level=mol' },
   { id: 'maxwell', q: '' },
   { id: 'massenergy', q: '?act=balance' },
-  { id: 'gravity', q: '?g=escape' }
+  { id: 'gravity', q: '?g=escape' },
+  { id: 'aiagent', q: '' }
 ];
 
 function httpReq(url, method) {

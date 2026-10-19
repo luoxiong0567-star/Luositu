@@ -420,3 +420,23 @@ input[type=range]::-webkit-slider-thumb {
 #galleryBtn{margin:10px 14px 6px;padding:8px 10px;font-size:12.5px;letter-spacing:1px;color:#bcd6ee;cursor:pointer;
   background:rgba(13,20,34,.7);border:1px solid rgba(77,226,255,.28);border-radius:8px;transition:all .18s ease;width:calc(100% - 28px);text-align:left;}
 #galleryBtn:hover{color:#eaf6ff;border-color:rgba(77,226,255,.6);box-shadow:0 0 14px rgba(77,226,255,.25);}
+/* ---------- 内嵌页面场景（AI-Agent思维模型） ---------- */
+/* iframe 覆盖整个舞台，页面自带标题，因此隐藏主界面标题栏避免遮挡 */
+#stage.embed-mode #titlebar { display: none; }
+.embed-wrap { position: absolute; inset: 0; z-index: 6; background: #0a0d14; }
+.embed-frame { width: 100%; height: 100%; border: 0; display: block; background: #ece9e3; }
+.embed-loading {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: radial-gradient(circle at 50% 45%, #121722 0%, #07090f 70%);
+  color: #cfe6ff; transition: opacity .32s ease;
+}
+.embed-loading.hide { opacity: 0; pointer-events: none; }
+.embed-loading i {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid rgba(77,226,255,.18); border-top-color: #4de2ff;
+  animation: embedSpin .9s linear infinite;
+}
+.embed-loading b { font-size: 13px; font-weight: 600; letter-spacing: 1.5px; }
+.embed-loading span { font-size: 10.5px; letter-spacing: 2px; color: #5f7190; }
+@keyframes embedSpin { to { transform: rotate(360deg); } }
