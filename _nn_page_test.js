@@ -75,8 +75,23 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     };
   })())`) || {};
 
+  /* 宽度控件：切到 XL，检查各层节点与参数数量同步 */
+  const w = await evalx(`(function(){
+    var r = window.__NN.setWidth(3);
+    var f = document.querySelectorAll('.feat').length;
+    var info = document.getElementById('wInfo').textContent;
+    var st = window.__NN.state;
+    return JSON.stringify({ dims: st.dims, feats: f, info: info, params: st.params,
+      pathLens: st.pathLens, wIdx: st.wIdx, rows: document.querySelectorAll('.feat').length });
+  })()`) || {};
+  const okW = JSON.stringify(w.dims) === JSON.stringify([28,28,24,8]) && w.feats === 28 &&
+    w.info === '28·28·24·8' && w.pathLens && w.pathLens[0] === 28*28;
+  console.log('width -> XL:', okW ? 'PASS' : 'FAIL', JSON.stringify(w));
+  /* 切回默认档，便于后续截图 */
+  await evalx('window.__NN.setWidth(0)');
+
   const s1 = a || {}, s2 = b.state || {};
-  const ok = s2.step >= 1 && s2.parts > 0 && b.logLines >= 5 && b.feats === 9 && b.tags === 4 &&
+  const ok = s2.step >= 1 && s2.parts > 0 && b.logLines >= 5 && b.feats === 12 && b.tags === 4 &&
     b.cvW > 400 && b.boot === 'gone' && errors.length === 0;
   console.log((ok ? 'PASS' : 'FAIL'),
     'step=' + s2.step, 'parts=' + s2.parts, 'phase=' + (s2.phase || 0).toFixed(2),

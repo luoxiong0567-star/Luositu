@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>神经网络推理 · Neural Inference</title>
+<style>
+/* Layout: 深空蓝推理大屏 —— 顶栏状态轨 / 中部三层全连接网络（左侧特征输入列 + 右侧推理轨迹）/ 底栏参数统计。
+   视觉：深空渐变 + 透视网格 + 星尘粒子 + 霓虹青绿光线；节点按层依次点亮，信号光点沿连线流动。 */
+:root{
+  color-scheme:dark;
+  --bg:#04080f; --bg2:#071527; --panel:rgba(7,18,32,.82);
+  --ink:#dcf3ff; --ink2:#9fc4d8; --dim:#5f8199; --mute:#33506a;
+  --cy:#45e6f5; --gr:#3ff0c0; --pu:#a06bff; --or:#ffb054; --rd:#ff5f7e; --bl:#4f9dff;
+  --hair:rgba(90,180,220,.16); --hair2:rgba(90,180,220,.28);
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
+  --cjk:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:radial-gradient(120% 90% at 32% 18%,#0a1e36 0%,var(--bg2) 42%,var(--bg) 100%);
+  color:var(--ink);font-family:var(--mono);overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+#app{position:relative;height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+
+/* ---------- 顶栏 ---------- */
+header{position:relative;z-index:6;display:flex;align-items:center;gap:18px;
+  padding:12px 18px 11px;border-bottom:1px solid var(--hair);
+  background:linear-gradient(180deg,rgba(4,10,20,.92),rgba(4,10,20,.55) 70%,transparent)}
+.brand{display:grid;gap:4px;min-width:0}
+.brand h1{margin:0;font-family:var(--cjk);font-size:clamp(14px,1.5vw,19px);font-weight:700;letter-spacing:.06em;
+  white-space:nowrap;text-shadow:0 0 18px rgba(69,230,245,.35)}
+.brand h1 em{font-family:var(--mono);font-style:normal;font-weight:600;color:var(--cy);letter-spacing:.02em}
+.brand p{margin:0;font-size:9px;letter-spacing:.18em;color:var(--dim);white-space:nowrap}
+.brand p b{color:var(--gr);font-weight:500}
+
+.run{display:flex;align-items:center;gap:9px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.pill{display:flex;align-items:center;gap:7px;height:24px;padding:0 9px;border:1px solid var(--hair2);
+  font-size:9px;letter-spacing:.14em;color:var(--ink2);background:rgba(10,28,46,.5);white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:var(--gr);box-shadow:0 0 8px var(--gr);
+  animation:beat 1.6s ease-in-out infinite}
+.pill.paused i{background:var(--or);box-shadow:0 0 8px var(--or);animation:none}
+.pill b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+@keyframes beat{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.72)}}
+.ctl{font:inherit;font-size:10px;letter-spacing:.1em;font-family:var(--cjk);color:var(--ink2);
+  background:transparent;border:1px solid var(--hair2);padding:5px 10px;cursor:pointer;white-space:nowrap}
+.ctl:hover{color:var(--ink);border-color:var(--cy);box-shadow:0 0 12px rgba(69,230,245,.18)}
+.ctl:focus-visible{outline:1px solid var(--cy);outline-offset:2px}
+
+/* ---------- 主舞台 ---------- */
+main{position:relative;min-height:0;overflow:hidden}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* 层标签 */
+.tags{position:absolute;inset:0;pointer-events:none;z-index:3}
+.tag{position:absolute;transform:translateX(-50%);text-align:center;white-space:nowrap;
+  font-size:8.5px;letter-spacing:.16em;color:var(--mute)}
+.tag b{display:block;font-size:9.5px;letter-spacing:.12em;color:var(--dim);font-weight:500;margin-bottom:3px}
+.tag.on b{color:var(--cy);text-shadow:0 0 12px rgba(69,230,245,.5)}
+.tag::after{content:"";display:block;width:1px;height:9px;margin:4px auto 0;background:var(--hair2)}
+
+/* 输入特征列 */
+.feats{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:4}
+.feat{position:absolute;left:0;display:flex;align-items:center;gap:7px;height:40px;
+  transform:translateY(-50%);transition:opacity .35s}
+.feat .ft{display:grid;gap:1px;min-width:0;flex:1}
+.feat .ft b{font-size:10px;font-weight:600;letter-spacing:.04em;color:#b9d8e8;white-space:nowrap}
+.feat .ft i{font-family:var(--cjk);font-style:normal;font-size:8.5px;color:var(--dim);letter-spacing:.04em}
+.feat .spk{display:block;width:58px;height:20px;flex:0 0 auto}
+.feat .fv{font-size:10px;font-variant-numeric:tabular-nums;color:#7dffd0;width:34px;text-align:right;flex:0 0 auto}
+.feat.hot .ft b{color:var(--ink);text-shadow:0 0 10px rgba(69,230,245,.45)}
+.feat.hot .fv{color:#bfffea}
+
+/* 推理轨迹面板 */
+.trace{position:absolute;right:14px;top:14px;bottom:16px;width:min(308px,32%);z-index:5;
+  display:flex;flex-direction:column;min-height:0;
+  background:linear-gradient(160deg,rgba(6,17,30,.9),rgba(5,12,22,.72));
+  border:1px solid var(--hair);backdrop-filter:blur(7px);
+  box-shadow:0 0 0 1px rgba(69,230,245,.06),0 18px 50px rgba(0,0,0,.45)}
+.trace.hide{display:none}
+.th{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--hair);
+  font-size:8.5px;letter-spacing:.14em;color:var(--dim);white-space:nowrap}
+.th b{color:var(--ink2);font-weight:500;letter-spacing:.12em}
+.th em{margin-left:auto;font-style:normal;color:var(--mute);font-variant-numeric:tabular-nums}
+.th .rec{width:5px;height:5px;border-radius:50%;background:var(--rd);box-shadow:0 0 7px var(--rd);animation:beat 1.2s infinite}
+.tb{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:7px 10px 10px;display:flex;flex-direction:column;justify-content:flex-start;gap:1px}
+.ln{font-size:9.5px;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--dim);animation:slideIn .28s ease-out}
+.ln .t{color:var(--mute);margin-right:6px}
+.ln .k{color:var(--cy)}
+.ln .g{color:var(--gr)}
+.ln .o{color:var(--or)}
+.ln .n{color:var(--ink2);font-variant-numeric:tabular-nums}
+.ln.hd{color:var(--ink2);margin-top:3px}
+.ln.res{color:var(--ink);font-weight:600;letter-spacing:.01em}
+@keyframes slideIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+/* 底栏 */
+footer{position:relative;z-index:6;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:8px 18px;border-top:1px solid var(--hair);font-size:8.5px;letter-spacing:.13em;color:var(--mute);
+  background:linear-gradient(0deg,rgba(4,10,20,.92),transparent)}
+footer span b{color:var(--ink2);font-weight:500;font-variant-numeric:tabular-nums}
+footer .right{margin-left:auto;color:var(--mute)}
+footer .right b{color:var(--dim)}
+
+/* 光效叠加 */
+main::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:repeating-linear-gradient(to bottom,rgba(120,220,255,.022) 0 1px,transparent 1px 3px)}
+.vig{position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:radial-gradient(120% 100% at 40% 45%,transparent 45%,rgba(2,5,10,.55) 100%)}
+
+#boot{position:absolute;inset:0;display:grid;place-items:center;z-index:9;background:var(--bg);
+  color:var(--dim);font-size:10px;letter-spacing:.2em;transition:opacity .5s}
+#boot.gone{opacity:0;pointer-events:none}
+
+@media (max-width:1180px){
+  .feat .spk{width:44px}
+  .feat .fv{width:30px;font-size:9px}
+  .trace{width:min(268px,33%)}
+}
+@media (max-width:900px){
+  .trace{top:10px;right:10px;bottom:10px;width:min(230px,34%)}
+  .feat .ft i{display:none}
+  .feat .ft b{font-size:9px}
+}
+@media (max-width:720px){
+  .trace{display:none}
+  header{padding:9px 12px}
+  .brand p{display:none}
+  footer{padding:6px 12px;font-size:8px}
+  .feat .spk{display:none}
+  .feat .fv{display:none}
+  .feat .ft b{font-size:8.5px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <h1>神经网络推理 <em>NEURAL&nbsp;INFERENCE</em></h1>
+      <p>FORWARD PASS · 9 → 12 → 8 → 5 · <b id="hStatus">LIVE</b></p>
+    </div>
+    <div class="run">
+      <div class="pill" id="hPill"><i></i><span id="hPhase">INPUT</span><b id="hStep">0000</b></div>
+      <div class="pill"><span>LATENCY</span><b id="hLat">0.00ms</b></div>
+      <button class="ctl" id="bPause" type="button">暂停</button>
+      <button class="ctl" id="bSpeed" type="button">1.0×</button>
+      <button class="ctl" id="bReset" type="button">重置</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <canvas id="c" aria-label="神经网络前向传播可视化：左侧 9 个输入特征，经 12、8 个隐藏神经元，输出 5 个行为决策"></canvas>
+    <div class="tags" id="tags"></div>
+    <div class="feats" id="feats"></div>
+
+    <aside class="trace" id="trace">
+      <div class="th"><span class="rec"></span><b>INFERENCE TRACE</b><span>推理轨迹</span><em id="tRate">0.0 Hz</em></div>
+      <div class="tb" id="log"></div>
+    </aside>
+    <div class="vig"></div>
+  </main>
+
+  <footer>
+    <span>PARAMS <b id="fP">236</b></span>
+    <span>MAC <b id="fM">0.24K</b></span>
+    <span>DEPTH <b>3</b></span>
+    <span>ACT <b>ReLU / Softmax</b></span>
+    <span class="right">HOVER · 悬停节点查看激活值 — <b>SIMULATED AGENT</b></span>
+  </footer>
+</div>
+<div id="boot">INITIALIZING NEURAL CORE…</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= 0. 基础 ================= */
+  var $ = function (s) { return document.querySelector(s); };
+  var TAU = Math.PI * 2;
+  var clamp = function (v, a, b) { return v < a ? a : v > b ? b : v; };
+  var lerp = function (a, b, t) { return a + (b - a) * t; };
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var CV = $('#c'), cx = CV.getContext('2d');
+  var tagsEl = $('#tags'), featsEl = $('#feats'), logEl = $('#log');
+  var W = 0, H = 0, DPR = 1;
+
+  /* 固定种子权重（每次打开网络结构一致，观感稳定） */
+  var seed = 20261022;
+  function rnd() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+  function gauss() { return (rnd() + rnd() + rnd() - 1.5) * 0.9; }
+
+  /* ================= 1. 网络定义 ================= */
+  var FEATS = [
+    { k: 'hunger', en: 'Hunger',      cn: '饥饿度',   v: 0.72 },
+    { k: 'food',   en: 'Food Dist',   cn: '食物距离', v: 0.41 },
+    { k: 'smell',  en: 'Smell Fox',   cn: '狐狸气味', v: 0.08 },
+    { k: 'fox',    en: 'Fox Dist',    cn: '狐狸距离', v: 0.27 },
+    { k: 'thirst', en: 'Thirst',      cn: '口渴度',   v: 0.55 },
+    { k: 'buddy',  en: 'Buddy Dist',  cn: '同伴距离', v: 0.63 },
+    { k: 'water',  en: 'Water Dist',  cn: '水源距离', v: 0.19 },
+    { k: 'health', en: 'Health',      cn: '体力值',   v: 0.86 },
+    { k: 'day',    en: 'Day Time',    cn: '昼夜相位', v: 0.34 }
+  ];
+  var OUTS = [
+    { en: 'FORAGE', cn: '觅食', c: '#3ff0c0' },
+    { en: 'DRINK',  cn: '饮水', c: '#45e6f5' },
+    { en: 'FLEE',   cn: '逃跑', c: '#ff5f7e' },
+    { en: 'SEEK ALLY', cn: '寻伴', c: '#a06bff' },
+    { en: 'REST',   cn: '休整', c: '#ffb054' }
+  ];
+  var N0 = FEATS.length, N1 = 12, N2 = 8, N3 = OUTS.length;
+
+  FEATS.forEach(function (f) {
+    f.hist = [];
+    for (var i = 0; i < 26; i++) f.hist.push(clamp(f.v + (rnd() - 0.5) * 0.12, 0.02, 0.98));
+    f.hist[f.hist.length - 1] = f.v;
+  });
+
+  function mkLayer(n, m) {
+    var w = [], b = [];
+    for (var i = 0; i < n; i++) {
+      var row = [];
+      for (var j = 0; j < m; j++) row.push(gauss() * 1.15);
+      w.push(row);
+      b.push(gauss() * 0.12);
+    }
+    return { w: w, b: b, n: n, m: m };
+  }
+  var L1 = mkLayer(N1, N0), L2 = mkLayer(N2, N1), L3 = mkLayer(N3, N2);
+  var PARAMS = N1 * N0 + N1 + N2 * N1 + N2 + N3 * N2 + N3;
+
+  var act = { x: FEATS.map(function (f) { return f.v; }), h1: zeros(N1), h2: zeros(N2), y: zeros(N3) };
+  function zeros(n) { var a = []; for (var i = 0; i < n; i++) a.push(0); return a; }
+  function relu(v) { return v > 0 ? v : 0; }
+  function forward(layer, input) {
+    var out = [];
+    for (var i = 0; i < layer.n; i++) {
+      var s = layer.b[i], w = layer.w[i];
+      for (var j = 0; j < layer.m; j++) s += w[j] * input[j];
+      out.push(s);
+    }
+    return out;
+  }
+  function softmax(v) {
+    var mx = Math.max.apply(null, v), e = v.map(function (x) { return Math.exp(x - mx); });
+    var s = e.reduce(function (a, b) { return a + b; }, 0);
+    return e.map(function (x) { return x / s; });
+  }
+  var latency = 0, best = 0;
+
+  function infer() {
+    var t0 = performance.now();
+    act.h1 = forward(L1, act.x).map(relu);
+    act.h2 = forward(L2, act.h1).map(relu);
+    act.y = softmax(forward(L3, act.h2).map(function (v) { return v / 0.62; }));
+    latency = performance.now() - t0;
+    var bi = 0;
+    for (var i = 1; i < act.y.length; i++) if (act.y[i] > act.y[bi]) bi = i;
+    best = bi;
+    return bi;
+  }
+  function newSample() {
+    FEATS.forEach(function (f) {
+      f.v = clamp(f.v + (rnd() - 0.5) * 0.16, 0.03, 0.97);
+      f.hist.push(f.v);
+      if (f.hist.length > 26) f.hist.shift();
+    });
+    act.x = FEATS.map(function (f) { return f.v; });
+  }
+
+  /* ================= 2. 几何 ================= */
+  var LS = [], R = 0;   /* 层几何 / 网络可用右边界 */
+  var EDGES = [];   /* 连接：{a, i, j, w, alpha} */
+  var tagEls = [];
+
+  function layout() {
+    W = CV.clientWidth || 1; H = CV.clientHeight || 1;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    CV.width = Math.round(W * DPR); CV.height = Math.round(H * DPR);
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    var narrow = W < 900;
+    /* 右侧推理轨迹面板占位：网络只排布在剩余宽度内，避免输出层被面板遮住 */
+    var traceEl = $('#trace');
+    var tw = traceEl && traceEl.offsetParent !== null ? traceEl.offsetWidth + 22 : 0;
+    R = Math.max(320, W - tw);
+    var xs = narrow ? [0.30, 0.50, 0.69, 0.86] : [0.29, 0.50, 0.69, 0.86];
+    var ns = [N0, N1, N2, N3];
+    LS = [];
+    for (var li = 0; li < 4; li++) {
+      var n = ns[li];
+      var span = H * (li === 0 ? 0.66 : li === 3 ? 0.44 : 0.62);
+      var gap = Math.min(li === 0 ? 46 : li === 3 ? 58 : 40, span / Math.max(1, n - 1));
+      var y0 = H * 0.5 - (n - 1) * gap / 2;
+      var ys = [];
+      for (var i = 0; i < n; i++) ys.push(y0 + i * gap);
+      LS.push({ n: n, x: R * xs[li], ys: ys, gap: gap });
+    }
+
+    EDGES = [];
+    for (var a = 0; a < 3; a++) {
+      var LAY = [L1, L2, L3][a], from = LS[a], to = LS[a + 1];
+      for (var i = 0; i < from.n; i++) {
+        for (var j = 0; j < to.n; j++) {
+          var w = LAY.w[j][i];
+          EDGES.push({ a: a, i: i, j: j, w: w, al: 0.055 + 0.24 * Math.min(1, Math.abs(w) / 1.6) });
+        }
+      }
+    }
+
+    buildFeats();
+    buildTags();
+
+    /* 层位置变化后重建静态几何缓存 */
+    geoDirty = true;
+  }
+
+  function buildTags() {
+    tagsEl.innerHTML = '';
+    tagEls = [];
+    var names = [
+      ['INPUT', '特征 · 9'],
+      ['FC1', '全连接 · 12 · ReLU'],
+      ['FC2', '全连接 · 8 · ReLU'],
+      ['OUT', '决策 · 5 · Softmax']
+    ];
+    LS.forEach(function (L, li) {
+      var d = document.createElement('div');
+      d.className = 'tag';
+      d.style.left = L.x + 'px';
+      d.style.top = Math.max(6, L.ys[0] - (li === 0 ? 46 : 42)) + 'px';
+      d.innerHTML = '<b>' + names[li][0] + '</b>' + names[li][1];
+      tagsEl.appendChild(d);
+      tagEls.push(d);
+    });
+  }
+
+  function buildFeats() {
+    featsEl.innerHTML = '';
+    var L = LS[0];
+    var colW = Math.max(120, L.x - 44);
+    FEATS.forEach(function (f, i) {
+      var row = document.createElement('div');
+      row.className = 'feat';
+      row.style.top = L.ys[i] + 'px';
+      row.style.width = colW + 'px';
+      row.style.paddingLeft = '14px';
+      row.innerHTML = '<div class="ft"><b>' + f.en + '</b><i>' + f.cn + '</i></div>' +
+        '<canvas class="spk" width="116" height="40"></canvas><span class="fv">0.00</span>';
+      featsEl.appendChild(row);
+      f.el = row;
+      f.fv = row.querySelector('.fv');
+      f.spk = row.querySelector('.spk');
+      f.sctx = f.spk.getContext('2d');
+    });
+    syncFeats();
+  }
+
+  function syncFeats() {
+    FEATS.forEach(function (f) {
+      if (!f.el) return;
+      f.fv.textContent = f.v.toFixed(2);
+      var c = f.sctx, w = f.spk.width, h = f.spk.height;
+      c.clearRect(0, 0, w, h);
+      var n = f.hist.length, step = w / 25;
+      /* 网格底 */
+      c.strokeStyle = 'rgba(90,180,220,.16)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(0, h - 1); c.lineTo(w, h - 1); c.stroke();
+      c.strokeStyle = 'rgba(90,180,220,.08)';
+      c.beginPath(); c.moveTo(0, h * 0.5); c.lineTo(w, h * 0.5); c.stroke();
+      /* 曲线：先面积后描边 */
+      var pts = [];
+      for (var i = 0; i < n; i++) pts.push([i * step, h - 3 - f.hist[i] * (h - 8)]);
+      var area = c.createLinearGradient(0, 0, 0, h);
+      area.addColorStop(0, 'rgba(63,240,192,.26)');
+      area.addColorStop(1, 'rgba(63,240,192,0)');
+      c.fillStyle = area;
+      c.beginPath();
+      c.moveTo(pts[0][0], h);
+      for (var k = 0; k < pts.length; k++) c.lineTo(pts[k][0], pts[k][1]);
+      c.lineTo(pts[pts.length - 1][0], h);
+      c.closePath(); c.fill();
+      var grad = c.createLinearGradient(0, 0, w, 0);
+      grad.addColorStop(0, 'rgba(63,240,192,.35)');
+      grad.addColorStop(1, 'rgba(120,255,215,1)');
+      c.strokeStyle = grad; c.lineWidth = 2; c.lineJoin = 'round'; c.lineCap = 'round';
+      c.beginPath();
+      for (var j = 0; j < pts.length; j++) j ? c.lineTo(pts[j][0], pts[j][1]) : c.moveTo(pts[j][0], pts[j][1]);
+      c.stroke();
+      /* 末点 + 光晕 */
+      var lp = pts[pts.length - 1];
+      c.shadowColor = 'rgba(63,240,192,.9)'; c.shadowBlur = 6;
+      c.fillStyle = 'rgba(210,255,240,1)';
+      c.beginPath(); c.arc(lp[0], lp[1], 2.4, 0, TAU); c.fill();
+      c.shadowBlur = 0;
+    });
+  }
+
+  /* ================= 3. 动画状态 ================= */
+  var geoDirty = true;
+  var t = 0, cycle = 4.0, phase = 0, paused = false, speed = 1, stepNo = 0;
+  var parts = [], ripples = [], dust = [], hotPhase = 0;
+  var curOut = 0, prevOut = 0, lastInferAt = -9, rateWin = [], rate = 0;
+
+  for (var d = 0; d < 54; d++) {
+    dust.push({ x: rnd(), y: rnd(), r: 0.5 + rnd() * 1.3, s: 0.004 + rnd() * 0.012, a: 0.10 + rnd() * 0.35, ph: rnd() * TAU });
+  }
+
+  /* 阶段能量：0→1 表示该层被点亮 */
+  var STAGE = [[0.02, 0.20], [0.22, 0.46], [0.48, 0.72], [0.74, 0.94]];
+  function glow(li) {
+    var r = STAGE[li];
+    return clamp((phase - r[0]) / (r[1] - r[0]), 0, 1);
+  }
+
+  function spawn(stage) {
+    var pool = [];
+    for (var k = 0; k < EDGES.length; k++) if (EDGES[k].a === stage) pool.push(EDGES[k]);
+    if (!pool.length) return;
+    var e = pool[(rnd() * pool.length) | 0];
+    parts.push({ e: e, u: 0, sp: 0.55 + rnd() * 0.85, life: 1, hue: stage === 2 && rnd() < 0.25 ? 'red' : 'cyan' });
+  }
+
+  function tick(dt) {
+    t += dt;
+    if (!paused) {
+      if (!reduce) {
+        phase += dt / (cycle / speed);
+        if (phase >= 1) {
+          phase = 0;
+          stepNo++;
+          prevOut = curOut;
+          newSample();
+          curOut = infer();
+          syncFeats();
+          pushRun();
+          /* 新一轮的输入更新 */
+          rateWin.push(t);
+          while (rateWin.length && t - rateWin[0] > 4) rateWin.shift();
+        }
+        /* 粒子生成：源层点亮后持续发车 */
+        for (var s = 0; s < 3; s++) {
+          if (glow(s) > 0.55 && rnd() < dt * (7 + 12 * speed)) spawn(s);
+        }
+        /* 波形能量衰减 */
+        hotPhase = Math.max(0, hotPhase - dt * 1.6);
+      }
+    }
+
+    /* 粒子推进 */
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var p = parts[i];
+      p.u += p.sp * dt * (paused ? 0 : 1);
+      if (p.u >= 1) {
+        ripples.push({ li: p.e.a + 1, j: p.e.j, r: 0, a: 0.55, c: p.hue });
+        parts.splice(i, 1);
+      }
+    }
+    for (var r = ripples.length - 1; r >= 0; r--) {
+      var w = ripples[r];
+      w.r += dt * (26 + 40 * speed); w.a -= dt * 1.5;
+      if (w.a <= 0) ripples.splice(r, 1);
+    }
+  }
+
+  /* ================= 4. 绘制 ================= */
+  var path = null;
+  function buildPaths() {
+    path = { 0: [], 1: [], 2: [] };
+    for (var s = 0; s < 3; s++) {
+      var A = LS[s], B = LS[s + 1];
+      var arr = [];
+      for (var i = 0; i < A.n; i++) {
+        for (var j = 0; j < B.n; j++) {
+          var x1 = A.x, y1 = A.ys[i], x2 = B.x, y2 = B.ys[j];
+          var mx = (x1 + x2) / 2;
+          var p = new Path2D();
+          p.moveTo(x1, y1);
+          p.bezierCurveTo(mx, y1, mx, y2, x2, y2);
+          arr.push({ p: p, x1: x1, y1: y1, x2: x2, y2: y2, mx: mx, w: EDGES.length });
+        }
+      }
+      path[s] = arr;
+    }
+    geoDirty = false;
+  }
+
+  function bezPoint(e, u) {
+    var v = 1 - u;
+    var x = v * v * v * e.x1 + 3 * v * v * u * e.mx + 3 * v * u * u * e.mx + u * u * u * e.x2;
+    var y = v * v * v * e.y1 + 3 * v * v * u * e.y1 + 3 * v * u * u * e.y2 + u * u * u * e.y2;
+    return [x, y];
+  }
+
+  function draw() {
+    cx.clearRect(0, 0, W, H);
+
+    /* --- 深空底 + 光晕 --- */
+    var g = cx.createRadialGradient(W * 0.42, H * 0.46, 20, W * 0.42, H * 0.46, Math.max(W, H) * 0.78);
+    g.addColorStop(0, 'rgba(12,40,68,.55)');
+    g.addColorStop(0.45, 'rgba(6,20,36,.18)');
+    g.addColorStop(1, 'rgba(3,7,14,0)');
+    cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+
+    /* --- 透视网格 --- */
+    cx.save();
+    cx.strokeStyle = 'rgba(90,190,230,.075)';
+    cx.lineWidth = 1;
+    var hz = H * 0.80;
+    for (var i = 1; i <= 12; i++) {
+      var yy = hz - Math.pow(i / 12, 2.1) * H * 0.66;
+      cx.beginPath(); cx.moveTo(0, yy); cx.lineTo(W, yy); cx.stroke();
+    }
+    var vx = W * 0.42;
+    for (var k = -9; k <= 9; k++) {
+      cx.beginPath(); cx.moveTo(vx + k * W * 0.11, H); cx.lineTo(vx + k * W * 0.035, hz - H * 0.62); cx.stroke();
+    }
+    cx.restore();
+
+    /* --- 星尘 --- */
+    for (var d = 0; d < dust.length; d++) {
+      var s0 = dust[d];
+      s0.y -= s0.s * (paused ? 0 : 1);
+      if (s0.y < -0.02) { s0.y = 1.02; s0.x = rnd(); }
+      var tw = 0.55 + 0.45 * Math.sin(t * 1.4 + s0.ph);
+      cx.globalAlpha = s0.a * tw;
+      cx.fillStyle = '#8fd8ef';
+      cx.beginPath(); cx.arc(s0.x * W, s0.y * H, s0.r, 0, TAU); cx.fill();
+    }
+    cx.globalAlpha = 1;
+
+    /* --- 横向扫描光带 --- */
+    var scanX = (((t * 0.075) % 1.5) - 0.2) * R;
+    var sg = cx.createLinearGradient(scanX - 70, 0, scanX + 70, 0);
+    sg.addColorStop(0, 'rgba(69,230,245,0)');
+    sg.addColorStop(0.5, 'rgba(69,230,245,.06)');
+    sg.addColorStop(1, 'rgba(69,230,245,0)');
+    cx.fillStyle = sg;
+    cx.fillRect(scanX - 70, 0, 140, H);
+
+    if (geoDirty) buildPaths();
+
+    /* --- 连线：每层合并为「冷 / 热」两个 Path2D，避免逐条 stroke --- */
+    var eLayers = [glow(0), glow(1), glow(2)];
+    for (var li = 0; li < 3; li++) {
+      var e = eLayers[li], arr = path[li];
+      var cold = new Path2D(), hot = new Path2D();
+      for (var q = 0; q < arr.length; q++) {
+        (q % 7 === 0 ? hot : cold).addPath(arr[q].p);
+      }
+      cx.lineWidth = 0.75;
+      cx.strokeStyle = 'rgba(110,205,240,' + (0.07 + 0.30 * e).toFixed(3) + ')';
+      cx.stroke(cold);
+      cx.lineWidth = e > 0.6 ? 1.1 : 0.95;
+      cx.strokeStyle = 'rgba(145,245,255,' + (0.10 + 0.44 * e).toFixed(3) + ')';
+      cx.stroke(hot);
+    }
+
+    /* --- 信号光点 --- */
+    cx.globalCompositeOperation = 'lighter';
+    for (var pi = 0; pi < parts.length; pi++) {
+      var pt = parts[pi];
+      var ep = edgeOf(pt.e);
+      var uv = pt.u;
+      var xy = bezPoint(ep, uv), xp = bezPoint(ep, Math.max(0, uv - 0.12));
+      var grd = cx.createLinearGradient(xp[0], xp[1], xy[0], xy[1]);
+      var c1 = pt.hue === 'red' ? 'rgba(255,95,126,0)' : 'rgba(69,230,245,0)';
+      var c2 = pt.hue === 'red' ? 'rgba(255,120,150,.85)' : 'rgba(150,255,235,.95)';
+      grd.addColorStop(0, c1); grd.addColorStop(1, c2);
+      cx.strokeStyle = grd; cx.lineWidth = 1.6; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(xp[0], xp[1]); cx.lineTo(xy[0], xy[1]); cx.stroke();
+      cx.fillStyle = pt.hue === 'red' ? 'rgba(255,190,205,.95)' : 'rgba(210,255,245,.98)';
+      cx.beginPath(); cx.arc(xy[0], xy[1], 1.55, 0, TAU); cx.fill();
+    }
+
+    /* --- 节点 --- */
+    for (var nl = 0; nl < 4; nl++) {
+      var L = LS[nl], eN = glow(nl);
+      for (var ni = 0; ni < L.n; ni++) {
+        var nv = nodeVal(nl, ni);
+        var x = L.x, y = L.ys[ni];
+        var hot = nl === 0 ? f_energy(ni) : eN;
+        var rad = 3.1 + 3.4 * hot * (0.55 + 0.45 * Math.min(1, Math.abs(nv) / 1.1));
+        /* 外辉 */
+        if (hot > 0.12) {
+          var rg = cx.createRadialGradient(x, y, 0, x, y, rad * 5.2);
+          rg.addColorStop(0, 'rgba(120,255,225,' + (0.30 * hot).toFixed(3) + ')');
+          rg.addColorStop(1, 'rgba(69,230,245,0)');
+          cx.fillStyle = rg;
+          cx.beginPath(); cx.arc(x, y, rad * 5.2, 0, TAU); cx.fill();
+        }
+        /* 芯 */
+        cx.fillStyle = hot > 0.55 ? '#eafffb' : 'rgba(190,235,250,' + (0.35 + 0.55 * hot).toFixed(2) + ')';
+        cx.beginPath(); cx.arc(x, y, rad * 0.58, 0, TAU); cx.fill();
+        /* 环 */
+        cx.strokeStyle = nl === 3
+          ? hexA(OUTS[ni].c, 0.35 + 0.6 * hot)
+          : 'rgba(120,225,245,' + (0.28 + 0.6 * hot).toFixed(2) + ')';
+        cx.lineWidth = nl === 3 ? 1.6 : 1.15;
+        cx.beginPath(); cx.arc(x, y, rad, 0, TAU); cx.stroke();
+      }
+    }
+
+    /* --- 涟漪 --- */
+    for (var ri = 0; ri < ripples.length; ri++) {
+      var rp = ripples[ri], RL = LS[rp.li];
+      if (!RL) continue;
+      var rx = RL.x, ry = RL.ys[rp.j];
+      cx.strokeStyle = rp.c === 'red' ? 'rgba(255,110,140,' + rp.a.toFixed(2) + ')' : 'rgba(120,255,230,' + rp.a.toFixed(2) + ')';
+      cx.lineWidth = 1;
+      cx.beginPath(); cx.arc(rx, ry, 4 + rp.r * 0.6, 0, TAU); cx.stroke();
+    }
+    cx.globalCompositeOperation = 'source-over';
+
+    /* --- 输出标签 --- */
+    drawOut();
+  }
+
+  function edgeOf(o) {
+    var L = LS[o.a], R = LS[o.a + 1];
+    return {
+      x1: L.x, y1: L.ys[o.i], x2: R.x, y2: R.ys[o.j],
+      mx: (L.x + R.x) / 2
+    };
+  }
+  function nodeVal(li, i) {
+    if (li === 0) return act.x[i];
+    if (li === 1) return act.h1[i] || 0;
+    if (li === 2) return act.h2[i] || 0;
+    return act.y[i] || 0;
+  }
+  /* 输入层的点亮：第 i 个特征按顺序错峰亮起 */
+  function f_energy(i) {
+    var p = phase;
+    var st = 0.02 + (i / N0) * 0.15;
+    return clamp((p - st) / 0.07, 0, 1);
+  }
+
+  var outLbl = [];
+  function drawOut() {
+    var L = LS[3], e = glow(3);
+    for (var i = 0; i < L.n; i++) {
+      var pct = (act.y[i] * 100);
+      var isBest = i === best;
+      var a = (i === 0 || e > 0.2) ? 1 : 0.3;
+      cx.globalAlpha = a;
+      cx.textAlign = 'left';
+      cx.textBaseline = 'middle';
+      if (isBest) {
+        /* 最佳决策卡：色条 + 半透明底 + 双行文字 + 置信度条 */
+        var bx = L.x + 14, by = L.ys[i] - 19, bw = Math.min(112, R - bx - 6), bh = 38;
+        cx.fillStyle = 'rgba(6,18,30,.72)';
+        cx.fillRect(bx, by, bw, bh);
+        cx.strokeStyle = hexA(OUTS[i].c, 0.42); cx.lineWidth = 1;
+        cx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+        cx.fillStyle = hexA(OUTS[i].c, 0.9);
+        cx.fillRect(bx, by, 2.5, bh);
+        cx.font = '700 10.5px ui-monospace,Consolas,monospace';
+        cx.fillStyle = OUTS[i].c;
+        cx.fillText(OUTS[i].en, bx + 9, by + 9);
+        cx.font = '400 8px "Noto Sans SC",system-ui,sans-serif';
+        cx.fillStyle = 'rgba(220,245,255,.78)';
+        cx.fillText(OUTS[i].cn + ' · 决策输出', bx + 9, by + 20);
+        cx.fillStyle = hexA(OUTS[i].c, 0.20);
+        cx.fillRect(bx + 9, by + 28, bw - 46, 3);
+        cx.fillStyle = OUTS[i].c;
+        cx.fillRect(bx + 9, by + 28, (bw - 46) * act.y[i], 3);
+        cx.font = '600 9px ui-monospace,Consolas,monospace';
+        cx.fillStyle = 'rgba(235,255,250,.95)';
+        cx.textAlign = 'right';
+        cx.fillText(pct.toFixed(1) + '%', bx + bw - 8, by + 9);
+        cx.textAlign = 'left';
+      } else {
+        cx.font = '500 9px ui-monospace,Consolas,monospace';
+        cx.fillStyle = 'rgba(150,185,205,.8)';
+        cx.fillText(OUTS[i].en, L.x + 16, L.ys[i] - 1);
+        cx.font = '400 8.5px ui-monospace,Consolas,monospace';
+        cx.fillStyle = 'rgba(120,155,175,.75)';
+        cx.fillText(pct.toFixed(0) + '%', L.x + 16, L.ys[i] + 9);
+      }
+      cx.globalAlpha = 1;
+    }
+  }
+  function hexA(hex, a) {
+    var h = hex.replace('#', '');
+    var n = parseInt(h, 16);
+    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+
+  /* ================= 5. 文字面板 ================= */
+  function stamp() { return ('0' + (stepNo % 1000)).slice(-4); }
+  function pushLine(html) {
+    if (!logEl) return;
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    var el = div.firstElementChild;
+    if (!el || !el.classList.contains('ln')) return;
+    logEl.appendChild(el);
+    while (logEl.children.length > 34) logEl.removeChild(logEl.firstChild);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function pushBoot() {
+    var rows = [
+      '<div class="ln hd"><span class="t">boot</span><span class="k">neural core</span> v2.1 · simulated agent</div>',
+      '<div class="ln"><span class="t">├</span>layers <span class="n">9 → 12 → 8 → 5</span> · params <span class="g">' + PARAMS + '</span></div>',
+      '<div class="ln"><span class="t">├</span>W1[9×12] W2[12×8] W3[8×5] <span class="g">loaded</span></div>',
+      '<div class="ln"><span class="t">└</span>activation <span class="n">ReLU</span> · output <span class="n">Softmax</span></div>'
+    ];
+    for (var i = 0; i < rows.length; i++) pushLine(rows[i]);
+  }
+  function pushRun() {
+    if (!logEl) return;
+    var ms = (0.18 + rnd() * 0.7).toFixed(2);
+    var rows = [
+      '<div class="ln hd"><span class="t">#' + stamp() + '</span><span class="k">forward</span>(x) · ' +
+        'x[9] → h1[12] → h2[8] → y[5]</div>',
+      '<div class="ln"><span class="t">├</span>h1 = <span class="k">relu</span>(W1·x + b1) ' +
+        '<span class="n">9×12</span> <span class="g">' + ms + 'ms</span></div>',
+      '<div class="ln"><span class="t">├</span>h2 = <span class="k">relu</span>(W2·h1 + b2) ' +
+        '<span class="n">12×8</span></div>',
+      '<div class="ln"><span class="t">└</span>y = <span class="k">softmax</span>(W3·h2 + b3) ' +
+        '<span class="n">8×5</span></div>',
+      '<div class="ln res"><span class="t">→</span>argmax <span class="o">' + OUTS[best].en + '</span>' +
+        ' <span class="n">' + (act.y[best] * 100).toFixed(1) + '%</span>' +
+        ' <span class="g">Δ ' + (latency || 0.4).toFixed(2) + 'ms</span></div>'
+    ];
+    for (var i = 0; i < rows.length; i++) pushLine(rows[i]);
+  }
+
+  function updateHUD() {
+    var ph = phase < STAGE[1][0] ? 'INPUT' : phase < STAGE[2][0] ? 'HIDDEN 1' :
+      phase < STAGE[3][0] ? 'HIDDEN 2' : 'OUTPUT';
+    $('#hPhase').textContent = ph;
+    $('#hStep').textContent = ('0000' + stepNo).slice(-4);
+    $('#hLat').textContent = ((latency || 0.4) + 0.1 * rnd()).toFixed(2) + 'ms';
+    $('#fP').textContent = PARAMS;
+    $('#fM').textContent = (PARAMS / 1000).toFixed(2) + 'K';
+    if (rateWin.length > 1) {
+      rate = (rateWin.length - 1) / Math.max(0.001, rateWin[rateWin.length - 1] - rateWin[0]);
+      $('#tRate').textContent = rate.toFixed(1) + ' Hz';
+    }
+    for (var i = 0; i < tagEls.length; i++) tagEls[i].classList.toggle('on', glow(i) > 0.65);
+    for (var f = 0; f < FEATS.length; f++) {
+      if (FEATS[f].el) FEATS[f].el.classList.toggle('hot', f_energy(f) > 0.5);
+    }
+  }
+
+  /* ================= 6. 主循环 ================= */
+  var last = performance.now(), hudAcc = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    tick(dt);
+    draw();
+    hudAcc += dt;
+    if (hudAcc > 0.12) { hudAcc = 0; updateHUD(); }
+  }
+
+  /* ================= 7. 交互 ================= */
+  var bPause = $('#bPause'), bSpeed = $('#bSpeed');
+  bPause.addEventListener('click', function () {
+    paused = !paused;
+    bPause.textContent = paused ? '继续' : '暂停';
+    $('#hStatus').textContent = paused ? 'HOLD' : 'LIVE';
+    $('#hPill').classList.toggle('paused', paused);
+  });
+  var SP = [1, 2, 4, 0.5], si = 0;
+  bSpeed.addEventListener('click', function () {
+    si = (si + 1) % SP.length;
+    speed = SP[si];
+    bSpeed.textContent = speed.toFixed(1) + '×';
+    cycle = 4.0;
+  });
+  $('#bReset').addEventListener('click', function () {
+    seed = 20261022;
+    L1 = mkLayer(N1, N0); L2 = mkLayer(N2, N1); L3 = mkLayer(N3, N2);
+    stepNo = 0; phase = 0; t = 0;
+    parts.length = 0; ripples.length = 0;
+    logEl.innerHTML = '';
+    FEATS.forEach(function (f) { f.v = 0.3 + rnd() * 0.5; f.hist = []; for (var i = 0; i < 26; i++) f.hist.push(f.v); });
+    act.x = FEATS.map(function (f) { return f.v; });
+    curOut = infer();
+    syncFeats();
+  });
+
+  /* 悬停节点提示 */
+  var tipEl = null;
+  CV.addEventListener('pointermove', function (ev) {
+    var r = CV.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    var hit = null;
+    for (var li = 0; li < 4 && !hit; li++) {
+      var L = LS[li];
+      for (var i = 0; i < L.n; i++) {
+        if (Math.abs(mx - L.x) < 8 && Math.abs(my - L.ys[i]) < 8) { hit = { li: li, i: i }; break; }
+      }
+    }
+    if (hit) {
+      if (!tipEl) {
+        tipEl = document.createElement('div');
+        tipEl.style.cssText = 'position:absolute;z-index:8;pointer-events:none;font:9px/1.5 ui-monospace,monospace;' +
+          'color:#dcf3ff;background:rgba(6,16,28,.92);border:1px solid rgba(69,230,245,.35);padding:5px 8px;white-space:nowrap';
+        document.getElementById('stage').appendChild(tipEl);
+      }
+      var nm = hit.li === 0 ? FEATS[hit.i].en : hit.li === 3 ? OUTS[hit.i].en : 'h' + hit.li + '[' + hit.i + ']';
+      var vv = nodeVal(hit.li, hit.i);
+      tipEl.innerHTML = nm + ' <b style="color:#3ff0c0">' + (hit.li === 3 ? (vv * 100).toFixed(1) + '%' : vv.toFixed(3)) + '</b>' +
+        '<br><span style="color:#5f8199">' + (hit.li === 3 ? 'softmax 概率' : hit.li === 0 ? '归一化特征' : '激活值') + '</span>';
+      tipEl.style.left = (LS[hit.li].x + 14) + 'px';
+      tipEl.style.top = (LS[hit.li].ys[hit.i] - 10) + 'px';
+      tipEl.style.display = 'block';
+    } else if (tipEl) tipEl.style.display = 'none';
+  });
+  CV.addEventListener('pointerleave', function () { if (tipEl) tipEl.style.display = 'none'; });
+
+  /* 键盘：空格暂停 */
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); bPause.click(); }
+  });
+
+  /* ================= 8. 启动 ================= */
+  var ro = null;
+  if (window.ResizeObserver) {
+    ro = new ResizeObserver(function () { layout(); });
+    ro.observe(document.getElementById('stage'));
+  } else {
+    window.addEventListener('resize', layout);
+  }
+
+  layout();
+  act.x = FEATS.map(function (f) { return f.v; });
+  curOut = infer();
+  best = curOut;
+  /* 开场前先吐两轮日志，避免空白面板 */
+  stepNo = 0; pushBoot(); pushRun();
+  setTimeout(function () { $('#boot').classList.add('gone'); }, 260);
+  requestAnimationFrame(frame);
+
+  window.__NN = {
+    get state() { return { phase: phase, step: stepNo, out: best, y: act.y.slice(), paused: paused, speed: speed, parts: parts.length, pathLens: path ? [path[0].length, path[1].length, path[2].length] : null, xs: LS.map(function (l) { return Math.round(l.x); }), glow: [glow(0), glow(1), glow(2), glow(3)] }; },
+    forward: function (v) { if (v && v.length === N0) { act.x = v.slice(); } curOut = infer(); best = curOut; return act.y.slice(); }
+  };
+})();
+</script>
+</body>
+</html>

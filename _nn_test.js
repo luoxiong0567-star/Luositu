@@ -97,7 +97,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   const s = a.state || {};
   const okA = a.hasFrame && a.frames === 1 && a.srcdocKB > 30 && a.title.indexOf('神经网络推理') >= 0 &&
-    s.step >= 1 && s.parts > 0 && a.feats === 9 && a.tags === 4 && a.logLines >= 10 &&
+    s.step >= 1 && s.parts > 0 && a.feats === 12 && a.tags === 4 && a.logLines >= 10 &&
     a.canvas >= 1 && a.traceW > 200 && a.stageEmbed && a.active === 'neuralnet';
   log('── 直达 #neuralnet ' + (okA ? 'PASS' : 'FAIL') +
     '  srcdoc=' + a.srcdocKB + 'KB step=' + s.step + ' parts=' + s.parts +
