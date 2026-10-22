@@ -143,7 +143,7 @@ function httpReq(u, m) {
     a.hasOps && s2.appW > 600 && s2.appH > 400 &&
     s2.agents >= 10 && s2.feed >= 5 && s2.cells >= 5 &&
     a.noSpiderHost && a.noPicker && a.seriesBtns === 0 && a.spiderTpl === false &&
-    a.stageEmbed === true && a.activeItem === 'aiagent' && a.sidebarItems === 13;
+    a.stageEmbed === true && a.activeItem === 'aiagent' && a.sidebarItems === 14;
   log('── 直达 #aiagent    ' + (okA ? 'PASS' : 'FAIL') +
     '  srcdoc=' + Math.round((a.srcdocLen || 0) / 1024) + 'KB' +
     ' shadowNodes=' + a.shadowNodes + ' app=' + s2.appW + '×' + s2.appH +
@@ -155,7 +155,7 @@ function httpReq(u, m) {
   if (!okA) bad++;
 
   /* ---------- B. 第四章归属 ---------- */
-  const okB = JSON.stringify(a.chapterIV) === JSON.stringify(['neural', 'aiagent']);
+  const okB = JSON.stringify(a.chapterIV) === JSON.stringify(['neural', 'aiagent', 'neuralnet']);
   log('── 第四章归属      ' + (okB ? 'PASS' : 'FAIL') + '  ' + JSON.stringify(a.chapterIV));
   if (!okB) bad++;
 
@@ -175,7 +175,7 @@ function httpReq(u, m) {
     gal: document.getElementById('gallery').classList.contains('show'),
     cards: document.querySelectorAll('#gallery .gal-card').length
   })`) || {};
-  const okC = c.gal === true && c.cards === 13;
+  const okC = c.gal === true && c.cards === 14;
   log('── Esc 回目录      ' + (okC ? 'PASS' : 'FAIL') + '  目录显示=' + c.gal + ' cards=' + c.cards);
   if (!okC) bad++;
 

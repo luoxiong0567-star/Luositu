@@ -26,7 +26,8 @@ const SHOTS = [
   { id: 'maxwell', q: '' },
   { id: 'massenergy', q: '?act=balance' },
   { id: 'gravity', q: '?g=escape' },
-  { id: 'aiagent', q: '' }
+  { id: 'aiagent', q: '' },
+  { id: 'neuralnet', q: '' }
 ];
 
 function httpReq(url, method) {

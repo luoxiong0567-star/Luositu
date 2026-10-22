@@ -48,6 +48,7 @@
       else if (k === '-') idx = 10;         // - → 第 11 个
       else if (k === '=') idx = 11;         // = → 第 12 个
       else if (k === 'q') idx = 12;         // q → 第 13 个
+      else if (k === 'w') idx = 13;         // w → 第 14 个
       if (idx >= 0) {
         var list = HL.allScenes();
         if (list[idx]) load(list[idx].id);
@@ -212,7 +213,8 @@
     maxwell: '四区全景：高斯电 / 磁通量、法拉第感应与位移电流',
     massenergy: '质量—能量天平、湮灭 / 裂变 / 聚变微观动画、太阳 vs 煤球',
     gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度',
-    aiagent: '12 个 AI 智能体的实时调度大屏：任务流、检索评审、成本与派发队列'
+    aiagent: '12 个 AI 智能体的实时调度大屏：任务流、检索评审、成本与派发队列',
+    neuralnet: '9 → 12 → 8 → 5 前向传播实时推理：逐层点亮、信号流动、决策概率'
   };
   var galleryEl;
 
@@ -221,7 +223,7 @@
     { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
     { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 生命之光', ids: ['periodic', 'molecule', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
-    { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体', ids: ['neural', 'aiagent'] }
+    { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体', ids: ['neural', 'aiagent', 'neuralnet'] }
   ];
 
   function buildGallery() {
@@ -236,7 +238,7 @@
     var cards = [];
 
     function keyOf(i) {
-      return i < 9 ? String(i + 1) : (['0', '-', '=', 'q'][i - 9] || '');
+      return i < 9 ? String(i + 1) : (['0', '-', '=', 'q', 'w'][i - 9] || '');
     }
     function addCard(def, i) {
       var key = keyOf(i);

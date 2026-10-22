@@ -132,14 +132,14 @@ function httpReq(url, method) {
         foot: g ? (g.querySelector('.gal-foot')||{}).textContent || '' : ''
       });
     })()`) || {};
-    const ok = v.show && v.chapters === 0 && v.cards === 13 && v.imgs >= 13 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
+    const ok = v.show && v.chapters === 0 && v.cards === 14 && v.imgs >= 14 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
     if (!ok) bad++;
     log('── 目录页平铺       ' + (ok ? 'PASS' : 'FAIL') + '  分组标题=' + v.chapters + ' cards=' + v.cards + ' imgs=' + v.imgs +
       ' [' + (v.chNames || []).join(' | ') + ']' + (r.errors.length ? ' !! ' + r.errors[0] : ''));
     await r.close();
   }
 
-  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ 全量回归 13/13 通过');
+  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ 全量回归 14/14 通过');
   fs.writeFileSync(path.join(ROOT, '_t1_out.txt'), LOG.join('\n'), 'utf8');
   try { child.kill(); } catch (e) {}
   process.exit(0);
