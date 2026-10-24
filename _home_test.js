@@ -1,4 +1,4 @@
-// 开篇页 + 五分钟速览：截图与状态校验
+// 开篇页 + 两分钟速览：截图与状态校验
 // 用法：node _home_test.js [all|home|journey]
 const { execFile } = require('child_process');
 const http = require('http');

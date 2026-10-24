@@ -95,6 +95,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(5200);
   await shot('m-jr-math.png');
 
+  // 改版后的三处新落点：玻尔原子（第 4 段）/ 麦克斯韦（第 6 段）/ 推理大屏（第 8 段）
+  await ev('HL.journey.start(HL.JOURNEY, 3)');
+  await sleep(5200);
+  await shot('m-jr-atom.png');
+
+  await ev('HL.journey.start(HL.JOURNEY, 5)');
+  await sleep(5200);
+  await shot('m-jr-maxwell.png');
+
+  await ev('HL.journey.start(HL.JOURNEY, 7)');
+  await sleep(5600);
+  await shot('m-jr-neural.png');
+
   console.log('CARD ' + await ev(`(function(){
     var c = document.querySelector('.jr-card').getBoundingClientRect();
     return JSON.stringify({w: Math.round(c.width), h: Math.round(c.height),

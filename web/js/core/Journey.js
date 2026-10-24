@@ -1,5 +1,5 @@
 /**
- * HL.Journey —— 跨场景播放器（「五分钟速览」）
+ * HL.Journey —— 跨场景播放器（「两分钟速览」）
  *
  * 与 HL.Tour 的分工：
  *   Tour     一个场景内部的讲解步骤（相机在场景里飞，旁白换文字）
@@ -58,7 +58,7 @@
       var nScene = (HL.allScenes && HL.allScenes().length) || 16;
       root.innerHTML =
         '<div class="jr-top">' +
-        '<span class="jr-brand">✦ 人类之光 · 五分钟速览</span>' +
+        '<span class="jr-brand">✦ 人类之光 · 两分钟速览</span>' +
         '<span class="jr-count"></span>' +
         '<button class="jr-quit" title="退出速览（Esc）">✕</button>' +
         '</div>' +
@@ -141,8 +141,7 @@
 
     function drawArt(elapsed) {
       if (!art || !art.ctx) return;
-      var c = art.ctx, w = art.w, h = art.h;
-      c.clearRect(0, 0, w, h);
+      var c = art.ctx, w = art.w, h = art.h;      c.clearRect(0, 0, w, h);
 
       var g = c.createRadialGradient(w * 0.5, h * 0.42, 10, w * 0.5, h * 0.42, Math.max(w, h) * 0.8);
       g.addColorStop(0, 'rgba(14,24,44,0.96)');
@@ -167,10 +166,17 @@
       var y = h * 0.48;
       var font = '600 ' + size + 'px "Songti SC","STSong","SimSun",serif';
 
+      // 显影节奏跟着段落时长走（原来写死 900 + k*1500，是按 12 s 排的）。
+      // 速览压到 2 分钟、这一段只有 9 s 时，固定节奏会让最后一个字来不及出现。
+      var dur = art.dur || 12000;
+      var g0 = dur * 0.08;                       // 首字落点
+      var gs = dur * 0.42 / (n - 1);             // 字间距（末字落在 50% 处）
+      var rd = Math.max(320, gs * 0.62);         // 单字显影时长
+
       for (var k = 0; k < n; k++) {
-        var t = elapsed - (900 + k * 1500);
+        var t = elapsed - (g0 + k * gs);
         if (t < 0) continue;
-        var p = clamp(t / 900, 0, 1);
+        var p = clamp(t / rd, 0, 1);
         var x = w / 2 - totalW / 2 + k * gap;
 
         c.save();
@@ -204,7 +210,7 @@
         c.fillText('0' + (k + 1), x, y + size * 0.78);
       }
 
-      var lt = elapsed - (900 + n * 1500 + 400);
+      var lt = elapsed - (g0 + gs * (n - 1) + dur * 0.07);
       if (lt > 0) {
         var lp = clamp(lt / 900, 0, 1);
         c.globalAlpha = 0.55 * (1 - lp * 0.4);
@@ -241,9 +247,10 @@
       }
 
       var zoom = b.zoom || 1;
-      // 竖屏（手机）：底部字幕卡占的比例更大，整体再退一点，别把主体压到卡上
+      // 竖屏（手机）：底部字幕卡占的比例更大，整体再退一点，别把主体压到卡上。
+      // 横屏里已经取景刚好的镜头（如麦克斯韦的电磁波），竖屏要退得更多 —— 用 pzoom 单独给。
       var portrait = c.dom && c.dom.clientHeight > c.dom.clientWidth * 1.1;
-      if (portrait) zoom *= 1.3;
+      if (portrait) zoom *= (b.pzoom || 1.3);
       end.radius = clamp(end.radius * zoom, c.minDistance * 1.02, c.maxDistance);
 
       // lift：把画面整体上移若干像素，避开底部字幕卡（正数 = 内容上移）
@@ -308,11 +315,12 @@
       }
     }
 
-    function showArt(on) {
+    function showArt(on, dur) {
       if (on) {
         ensureArt();
         sizeArt();
         art.t = 0;
+        art.dur = dur || 12000;      // 甲骨显影节奏按本段时长排
         art.classList.add('show');
         if (ui) ui.card.classList.add('on-art');
       } else if (art) {
@@ -348,7 +356,7 @@
 
       if (curSeg.kind === 'open') {
         mode = 'seg';
-        showArt(true);
+        showArt(true, curSeg.dur);
         return;
       }
 

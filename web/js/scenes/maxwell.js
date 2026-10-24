@@ -1801,6 +1801,16 @@
        * 参数
        * ========================================================== */
       function setParam(k, v) {
+        // view：给速览用的"立刻落位"版本——直接摆到该展区、并把它存成 home，
+        // 之后 Journey 的相机飞行会从这个新 home 的外圈推近，不会和场景自己的
+        // 飞行动画（updateFly）抢 controls。
+        if (k === 'view') {
+          P.focus = v;
+          flyToView(v, true);
+          syncFocusButtons(v);
+          refreshNote();
+          return;
+        }
         P[k] = v;
         if (k === 'focus') { flyToView(v, T < 0.001); return; }
         if (k === 'lines' || k === 'monopole') { rebuildFieldLines(); return; }

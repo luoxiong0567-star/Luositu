@@ -103,7 +103,7 @@
     var noHome = /[?&]home=0/.test(location.search);
     var wantJourney = /[?&]journey=1/.test(location.search);
 
-    // 跨场景播放器（「五分钟速览」）：退出后回到目录页，或回到开篇
+    // 跨场景播放器（「两分钟速览」）：退出后回到目录页，或回到开篇
     HL.journey = HL.Journey({
       loadScene: load,
       onExit: function (toHome) {

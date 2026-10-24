@@ -1322,7 +1322,7 @@ input[type=range]::-webkit-slider-thumb {
 #home.vis .hm-tip { opacity: 1; }
 .hm-tip i { font-style: normal; color: #5d86ad; }
 
-/* ---------------- 五分钟速览（#hlJourney） ---------------- */
+/* ---------------- 两分钟速览（#hlJourney） ---------------- */
 #hlJourney {
   position: absolute; inset: 0; z-index: 40;
   display: none; pointer-events: none;
@@ -1501,6 +1501,10 @@ input[type=range]::-webkit-slider-thumb {
 #app.journey-mode .solar-hud,
 #app.journey-mode .grav-hud,
 #app.journey-mode .hl-photo-badge { display: none !important; }
+
+/* 内嵌页面（神经网络推理）自带顶栏与右上角控件：播放时整体下移 42px，
+   否则页面标题会压在播放器品牌名上、页面控件会顶到「8 / 8」与关闭按钮 */
+#app.journey-mode #stage.embed-mode .embed-wrap { top: 42px; }
 
 /* 收尾卡：把背后的场景压暗，卡片才立得住 */
 #hlJourney.is-end::before {

@@ -272,7 +272,7 @@
         '<h1>从一粒星尘，<br>到一次思考。</h1>' +
         '<div class="hm-btns">' +
         '<button class="hm-enter">进入场景目录 <i>→</i></button>' +
-        '<button class="hm-journey"><i>▶</i> 五分钟速览</button>' +
+        '<button class="hm-journey"><i>▶</i> 两分钟速览</button>' +
         '</div>' +
         '<div class="hm-auto"><i></i><span></span></div>' +
         '</div>' +

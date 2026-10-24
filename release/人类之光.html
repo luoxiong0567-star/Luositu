@@ -1330,7 +1330,7 @@ input[type=range]::-webkit-slider-thumb {
 #home.vis .hm-tip { opacity: 1; }
 .hm-tip i { font-style: normal; color: #5d86ad; }
 
-/* ---------------- 五分钟速览（#hlJourney） ---------------- */
+/* ---------------- 两分钟速览（#hlJourney） ---------------- */
 #hlJourney {
   position: absolute; inset: 0; z-index: 40;
   display: none; pointer-events: none;
@@ -1510,6 +1510,10 @@ input[type=range]::-webkit-slider-thumb {
 #app.journey-mode .grav-hud,
 #app.journey-mode .hl-photo-badge { display: none !important; }
 
+/* 内嵌页面（神经网络推理）自带顶栏与右上角控件：播放时整体下移 42px，
+   否则页面标题会压在播放器品牌名上、页面控件会顶到「8 / 8」与关闭按钮 */
+#app.journey-mode #stage.embed-mode .embed-wrap { top: 42px; }
+
 /* 收尾卡：把背后的场景压暗，卡片才立得住 */
 #hlJourney.is-end::before {
   content: ''; position: absolute; inset: 0;
@@ -1588,7 +1592,7 @@ input[type=range]::-webkit-slider-thumb {
   location.replace('single.html' + location.search + location.hash);
 })();
 </script>
-<!-- 人类之光 · 单文件自包含版 · 构建于 2026-10-24 20:41 -->
+<!-- 人类之光 · 单文件自包含版 · 构建于 2026-10-24 21:38 -->
 </head>
 <body>
 <div id="app">
@@ -2804,7 +2808,7 @@ input[type=range]::-webkit-slider-thumb {
 <script>
 /* ==== js/core/Journey.js ==== */
 /**
- * HL.Journey —— 跨场景播放器（「五分钟速览」）
+ * HL.Journey —— 跨场景播放器（「两分钟速览」）
  *
  * 与 HL.Tour 的分工：
  *   Tour     一个场景内部的讲解步骤（相机在场景里飞，旁白换文字）
@@ -2863,7 +2867,7 @@ input[type=range]::-webkit-slider-thumb {
       var nScene = (HL.allScenes && HL.allScenes().length) || 16;
       root.innerHTML =
         '<div class="jr-top">' +
-        '<span class="jr-brand">✦ 人类之光 · 五分钟速览</span>' +
+        '<span class="jr-brand">✦ 人类之光 · 两分钟速览</span>' +
         '<span class="jr-count"></span>' +
         '<button class="jr-quit" title="退出速览（Esc）">✕</button>' +
         '</div>' +
@@ -2946,8 +2950,7 @@ input[type=range]::-webkit-slider-thumb {
 
     function drawArt(elapsed) {
       if (!art || !art.ctx) return;
-      var c = art.ctx, w = art.w, h = art.h;
-      c.clearRect(0, 0, w, h);
+      var c = art.ctx, w = art.w, h = art.h;      c.clearRect(0, 0, w, h);
 
       var g = c.createRadialGradient(w * 0.5, h * 0.42, 10, w * 0.5, h * 0.42, Math.max(w, h) * 0.8);
       g.addColorStop(0, 'rgba(14,24,44,0.96)');
@@ -2972,10 +2975,17 @@ input[type=range]::-webkit-slider-thumb {
       var y = h * 0.48;
       var font = '600 ' + size + 'px "Songti SC","STSong","SimSun",serif';
 
+      // 显影节奏跟着段落时长走（原来写死 900 + k*1500，是按 12 s 排的）。
+      // 速览压到 2 分钟、这一段只有 9 s 时，固定节奏会让最后一个字来不及出现。
+      var dur = art.dur || 12000;
+      var g0 = dur * 0.08;                       // 首字落点
+      var gs = dur * 0.42 / (n - 1);             // 字间距（末字落在 50% 处）
+      var rd = Math.max(320, gs * 0.62);         // 单字显影时长
+
       for (var k = 0; k < n; k++) {
-        var t = elapsed - (900 + k * 1500);
+        var t = elapsed - (g0 + k * gs);
         if (t < 0) continue;
-        var p = clamp(t / 900, 0, 1);
+        var p = clamp(t / rd, 0, 1);
         var x = w / 2 - totalW / 2 + k * gap;
 
         c.save();
@@ -3009,7 +3019,7 @@ input[type=range]::-webkit-slider-thumb {
         c.fillText('0' + (k + 1), x, y + size * 0.78);
       }
 
-      var lt = elapsed - (900 + n * 1500 + 400);
+      var lt = elapsed - (g0 + gs * (n - 1) + dur * 0.07);
       if (lt > 0) {
         var lp = clamp(lt / 900, 0, 1);
         c.globalAlpha = 0.55 * (1 - lp * 0.4);
@@ -3046,9 +3056,10 @@ input[type=range]::-webkit-slider-thumb {
       }
 
       var zoom = b.zoom || 1;
-      // 竖屏（手机）：底部字幕卡占的比例更大，整体再退一点，别把主体压到卡上
+      // 竖屏（手机）：底部字幕卡占的比例更大，整体再退一点，别把主体压到卡上。
+      // 横屏里已经取景刚好的镜头（如麦克斯韦的电磁波），竖屏要退得更多 —— 用 pzoom 单独给。
       var portrait = c.dom && c.dom.clientHeight > c.dom.clientWidth * 1.1;
-      if (portrait) zoom *= 1.3;
+      if (portrait) zoom *= (b.pzoom || 1.3);
       end.radius = clamp(end.radius * zoom, c.minDistance * 1.02, c.maxDistance);
 
       // lift：把画面整体上移若干像素，避开底部字幕卡（正数 = 内容上移）
@@ -3113,11 +3124,12 @@ input[type=range]::-webkit-slider-thumb {
       }
     }
 
-    function showArt(on) {
+    function showArt(on, dur) {
       if (on) {
         ensureArt();
         sizeArt();
         art.t = 0;
+        art.dur = dur || 12000;      // 甲骨显影节奏按本段时长排
         art.classList.add('show');
         if (ui) ui.card.classList.add('on-art');
       } else if (art) {
@@ -3153,7 +3165,7 @@ input[type=range]::-webkit-slider-thumb {
 
       if (curSeg.kind === 'open') {
         mode = 'seg';
-        showArt(true);
+        showArt(true, curSeg.dur);
         return;
       }
 
@@ -3607,7 +3619,7 @@ input[type=range]::-webkit-slider-thumb {
         '<h1>从一粒星尘，<br>到一次思考。</h1>' +
         '<div class="hm-btns">' +
         '<button class="hm-enter">进入场景目录 <i>→</i></button>' +
-        '<button class="hm-journey"><i>▶</i> 五分钟速览</button>' +
+        '<button class="hm-journey"><i>▶</i> 两分钟速览</button>' +
         '</div>' +
         '<div class="hm-auto"><i></i><span></span></div>' +
         '</div>' +
@@ -4244,10 +4256,10 @@ HL.ELEMENTS = [
 <script>
 /* ==== js/data/journey.js ==== */
 /**
- * 「五分钟速览」脚本：八段，十三个落点。
+ * 「两分钟速览」脚本：八段，十二个落点，合计 120 秒。
  *
  * 一段 = 一章 = 一句旁白；段内可以串多个镜头（beats）。
- * 这样既能满足"八段"的叙事节奏，又能把十三处现场都走到，
+ * 这样既能满足"八段"的叙事节奏，又能把十二处现场都走到，
  * 而不必为每一处单独开一段。
  *
  * beat 字段：
@@ -4256,11 +4268,22 @@ HL.ELEMENTS = [
  *   cam     显式机位 [[x,y,z],[tx,ty,tz]]（世界坐标）；不写就用场景自己的 home
  *   zoom    在 home 基础上再乘一个距离系数（<1 推近，>1 拉远）
  *   ms      这一镜停留多久（含飞行时间）
+ *   lift    画面整体上移若干像素，避开底部字幕卡
+ *   pzoom   仅竖屏（手机）生效的距离系数，缺省 1.3；横屏取景刚好的镜头要单独给大一点
  *   fly     飞行时长（毫秒），缺省 2400
  *
+ * 时长预算（要改就一起改，总时长 = 120 s）：
+ *   文字 9 + 宇宙 18 + 太阳系 13 + 原子 13 + 分子 20
+ *        + 电磁 10.5 + 引力质能 15.5 + 思维 21 = 120 s
+ *
  * 叙事主线：
- *   文字 → 星空 → 银河 → 太阳系 → 周期表 → 原子 → 分子 → DNA → 细胞
- *        → 光合 → 数学 → 引力 → 质能 → 神经网络 → 智能体
+ *   文字 → 星空 → 银河 → 太阳系 → 玻尔原子 → 蛋白 → DNA → 细胞
+ *        → 麦克斯韦 → 引力 → 质能 → 神经网络推理 → 智能体
+ *
+ * 与"五分钟版"的三处不同（2026-10 改版）：
+ *   · 光合作用整段移除（页面、动画、旁白一并不再出现）
+ *   · 微观直接落在玻尔原子上，不再"先看整张周期表再拉近"的铺垫
+ *   · 神经网络换成"神经网络推理"大屏（neuralnet），数学换成麦克斯韦方程组（maxwell）
  */
 (function (global) {
   'use strict';
@@ -4268,15 +4291,15 @@ HL.ELEMENTS = [
   var HL = global.HL = global.HL || {};
 
   HL.JOURNEY = [
-    /* ── 1 ───────────────────────────────────────────── 文字 */
+    /* ── 1 ─────────────────────────────────── 文字 · 9 s */
     {
-      kind: 'open', dur: 12000,
+      kind: 'open', dur: 9000,
       kicker: '序 · 文字',
       title: '人类第一次把世界写下来',
       line: '甲骨上刻下日、月、星、山、水——符号替我们记住了天空，也记住了时间。'
     },
 
-    /* ── 2 ───────────────────────────────────────── 星空与银河 */
+    /* ── 2 ───────────────────────────── 星空与银河 · 18 s */
     {
       kicker: 'Ⅰ · 宇宙的法则',
       title: '从仰望到俯瞰',
@@ -4285,85 +4308,85 @@ HL.ELEMENTS = [
         {
           scene: 'cosmos', params: { view: 'sky', labels: false },
           cam: [[0, 0.4, 0], [-18, 7.5, -34]],
-          ms: 10000, fly: 2800
+          ms: 9000, fly: 2400
         },
         {
           scene: 'cosmos', params: { view: 'galaxy' }, lift: 26,
           cam: [[0, 15.5, 21], [0, 0, 0]],
-          ms: 12000, fly: 3200
+          ms: 9000, fly: 2400
         }
       ]
     },
 
-    /* ── 3 ───────────────────────────────────────────── 太阳系 */
+    /* ── 3 ────────────────────────────────── 太阳系 · 13 s */
     {
       kicker: 'Ⅰ · 宇宙的法则',
       title: '太阳系',
       line: '八颗行星沿椭圆轨道运行：水星八十八天一圈，海王星要一百六十五年，同一套开普勒定律。',
       beats: [
-        { scene: 'solar', ms: 18000, fly: 3200, zoom: 0.92, lift: 18 }
+        { scene: 'solar', ms: 13000, fly: 2600, zoom: 0.92, lift: 18 }
       ]
     },
 
-    /* ── 4 ───────────────────────────────────── 回到微观 · 原子 */
+    /* ── 4 ─────────────────────────── 玻尔原子（直给）· 13 s */
     {
       kicker: 'Ⅱ · 物质的语言',
-      title: '回到微观：从一张表到一个原子',
-      line: '一百一十八种元素排成一张表；把其中一个格子拉近，是原子核与分层排布的电子——所有分子都由它们拼成。',
+      title: '原子：核与壳层',
+      line: '原子核在中心，电子按壳层排布：第一层两个位置，第二层八个——化学键的全部脾气，都写在这几层电子的排布里。',
       beats: [
-        // 整张表：稍微拉远并整体上移，避开底部字幕卡
-        { scene: 'periodic', params: { mode: 'table', hint: false }, zoom: 0.66, lift: 64, ms: 8000, fly: 2600 },
-        // 拉近到右侧的玻尔壳层示意（场景里 atomRoot 在 x≈13.4、y≈-6.1）
         {
-          scene: 'periodic', params: { mode: 'table', atom: true, hint: false },
-          cam: [[13.4, -6.9, 4.4], [13.4, -6.9, 0]],
-          ms: 9000, fly: 2800
+          scene: 'periodic', params: { solo: true, hint: false },
+          cam: [[0, 1.2, 10.5], [0, -0.3, 0]],
+          lift: 26, ms: 13000, fly: 2600
         }
       ]
     },
 
-    /* ── 5 ─────────────────────────────────────── 分子 · DNA · 细胞 */
+    /* ───────────────────────────── 分子 · DNA · 细胞 · 20 s */
     {
       kicker: 'Ⅱ · 物质的语言',
       title: '写在分子上的说明书',
-      line: '原子拼成分子，分子编成双螺旋：三十亿个字母写下一个人的全部构造，细胞照着它建起一座自给自足的城。',
+      line: '原子按价键拼成分子，分子编成双螺旋：三十亿个字母写下一个人的全部构造，细胞照着它建起一座城。',
       beats: [
-        { scene: 'molecule', params: { mode: 'alpha', spin: true }, lift: 18, ms: 7000, fly: 2400 },
-        { scene: 'molecule', params: { mode: 'dna', unwind: 0.35 }, zoom: 1.85, lift: 40, ms: 8000, fly: 2600 },
-        { scene: 'animalcell', params: { view: 'overview', cut: 0.35 }, zoom: 1.15, lift: 16, ms: 9000, fly: 2800 }
+        { scene: 'molecule', params: { mode: 'alpha', spin: true }, lift: 18, ms: 5500, fly: 1500 },
+        { scene: 'molecule', params: { mode: 'dna', unwind: 0.35 }, zoom: 1.85, lift: 40, ms: 6500, fly: 1800 },
+        { scene: 'animalcell', params: { view: 'overview', cut: 0.35 }, zoom: 1.15, lift: 16, ms: 8000, fly: 2000 }
       ]
     },
 
-    /* ── 6 ─────────────────────────────────────────── 光合作用 */
-    {
-      kicker: 'Ⅱ · 物质的语言',
-      title: '光合作用',
-      line: '叶绿素抓住一个光子，把水和二氧化碳变成糖，顺手放出我们呼吸的氧——整条食物链从这里开始。',
-      beats: [
-        { scene: 'photosynthesis', params: { level: 'leaf' }, lift: 34, ms: 15000, fly: 3000 }
-      ]
-    },
-
-    /* ── 7 ───────────────────────────────── 数学 · 引力 · 质能 */
+    /* ───────────────────────────────── 麦克斯韦方程组 · 10.5 s */
     {
       kicker: 'Ⅲ · 规律的抽象',
-      title: '用符号读懂看不见的东西',
-      line: '只用五条公设就能推出勾股定理，只用一条平方反比就能算出潮汐，只用 E = mc² 就能知道太阳在变轻。',
+      title: '四行方程写尽电磁',
+      line: '变化的磁场生电场，变化的电场生磁场——两条定律互相喂养，扰动便自己跑成了光。',
       beats: [
-        { scene: 'math', ms: 8000, fly: 2600 },
-        { scene: 'gravity', params: { sub: 'well' }, lift: 24, ms: 8000, fly: 2600 },
-        { scene: 'massenergy', params: { act: 'balance' }, zoom: 1.1, ms: 8000, fly: 2600 }
+        {
+          scene: 'maxwell', params: { view: 'C', cards: true },
+          cam: [[13.4, 8.2, 24.5], [13.2, 5.0, 0]],
+          lift: 30, pzoom: 1.8, ms: 10500, fly: 2400
+        }
       ]
     },
 
-    /* ── 8 ──────────────────────────────────── 神经网络 · 智能体 */
+    /* ─────────────────────────────────── 引力 · 质能 · 15.5 s */
+    {
+      kicker: 'Ⅲ · 规律的抽象',
+      title: '从引力到质能',
+      line: '一条平方反比算出潮汐与行星，一个 E = mc² 就能知道：太阳每秒轻了四百万吨。',
+      beats: [
+        { scene: 'gravity', params: { sub: 'well' }, lift: 24, ms: 7500, fly: 1900 },
+        { scene: 'massenergy', params: { act: 'balance' }, zoom: 1.1, ms: 8000, fly: 1900 }
+      ]
+    },
+
+    /* ───────────────────────── 神经网络推理 · 智能体 · 21 s */
     {
       kicker: 'Ⅳ · 思维的光芒',
       title: '思维也可以被观察',
-      line: '输入乘权重、加偏置、过激活函数，答案从概率里浮出来；再往前一步，它会规划、会调用工具、会互相评审。',
+      line: '二十八项训练参数喂进多层网络，权重逐层点亮，答案从概率里浮出来；再往前一步，它会规划、会调用工具。',
       beats: [
-        { scene: 'neural', ms: 10000, fly: 2800 },
-        { scene: 'aiagent', ms: 11000, fly: 2800 }
+        { scene: 'neuralnet', ms: 11000, fly: 2200 },
+        { scene: 'aiagent', ms: 10000, fly: 2400 }
       ]
     }
   ];
@@ -5782,6 +5805,16 @@ HL.registerScene({
     scene.add(ctx.makeStars(1800, 400));
 
     var params = { mode: 'table', atom: true, autoRotate: false, chamber: true, flip: true, logT: 2.474, refract: true };
+
+    /* ---------- 独立展示：只留玻尔模型（速览"直给"用） ----------
+     * setParam('solo', true) 把右侧那只小模型搬到画面中心放大，并隐藏整张
+     * 周期表、样品舱与提示条；同时每 3.4 s 换一个元素（H → C → O → Fe），
+     * 壳层一个个填满，比任何展开过程都直观。离开时原样恢复。
+     * 注意：必须声明在 buildAtom 之前——create 阶段就会调用 buildAtom，
+     * 那时若 solo 还是 undefined，读 solo.on 会抛错，整个场景就装不起来了。 */
+    var ATOM_SEQ = [1, 6, 8, 26];
+    var solo = { on: false, t: 0, i: 0 };
+    var hintWas = true;
     var blocks = [];
     var pickables = [];
     var hovered = null;
@@ -5847,6 +5880,7 @@ HL.registerScene({
     atomRoot.scale.setScalar(0.52);
     scene.add(atomRoot);
     var atomParts = [];
+    var atomHolders = [];      // 只放"电子环"的容器，速览里让电子沿环滑动
 
     /* 共享几何/材质：电子球最多 118 个，避免每次点击反复创建销毁 GPU 资源 */
     var GEO_E = new THREE.SphereGeometry(0.085, 12, 8);
@@ -5866,6 +5900,7 @@ HL.registerScene({
         }
       });
       atomParts = [];
+      atomHolders = [];
     }
 
     function buildAtom(Z) {
@@ -5878,11 +5913,13 @@ HL.registerScene({
       }
 
       var nucleus = new THREE.Mesh(GEO_N, MAT_N);
+      // 速览里原子独占画面：核缩一圈，壳层才像示意图而不是"行星+卫星"
+      nucleus.scale.setScalar(solo.on ? 0.34 : 1);
       atomRoot.add(nucleus);
       atomParts.push(nucleus);
 
       var core = new THREE.Sprite(ctx.glowSprite('rgba(255,190,90,0.7)'));
-      core.scale.set(3, 3, 1);
+      core.scale.set(solo.on ? 0.95 : 3, solo.on ? 0.95 : 3, 1);
       atomRoot.add(core);
       atomParts.push(core);
 
@@ -5890,8 +5927,14 @@ HL.registerScene({
         var R = 0.95 + li * 0.62;
         var ring = new THREE.Mesh(GEO_RING, MAT_RING);   // 单位环按半径缩放，避免每壳层新建几何
         ring.scale.set(R, R, R);
-        ring.rotation.x = Math.PI / 2 + (li % 2 ? 0.5 : -0.35);
-        ring.rotation.z = li * 0.6;
+        if (solo.on) {
+          // 独立展示：环面基本正对镜头（TorusGeometry 默认躺在 XY 平面），
+          // 每层只给一点倾角，看起来才是"壳层"而不是一圈侧着的扁椭圆
+          ring.rotation.set(-0.22 + li * 0.12, li * 0.22, 0);
+        } else {
+          ring.rotation.x = Math.PI / 2 + (li % 2 ? 0.5 : -0.35);
+          ring.rotation.z = li * 0.6;
+        }
         atomRoot.add(ring);
         atomParts.push(ring);
 
@@ -5905,19 +5948,26 @@ HL.registerScene({
         }
         atomRoot.add(holder);
         atomParts.push(holder);
+        atomHolders.push(holder);
       });
 
-      var lb = ctx.makeText('Z = ' + Z + '　壳层 ' + shells.join('·'), { size: 34, scale: 1.1, color: '#ffcf6b' });
-      lb.position.set(0, -2.6, 0);
+      var el = HL.ELEMENTS[Z - 1];
+      var tag = (el && el[0] === Z) ? (el[2] + ' ' + el[1]) : '';
+      var maxR = 0.95 + Math.max(0, shells.length - 1) * 0.62;   // 最外层壳半径
+      var lb = ctx.makeText((tag ? tag + '　' : '') + 'Z = ' + Z + '　壳层 ' + shells.join('·'), { size: 34, scale: 1.1, color: '#ffcf6b' });
+      lb.position.set(0, solo.on ? -(maxR + 0.55) : -2.6, 0);
       lb.userData.own = true;
       atomRoot.add(lb);
       atomParts.push(lb);
 
-      var note = ctx.makeText('玻尔简化壳层示意', { size: 26, scale: 0.9, color: '#6f7f9a' });
-      note.position.set(0, -3.1, 0);
-      note.userData.own = true;
-      atomRoot.add(note);
-      atomParts.push(note);
+      // 速览里不再挂"玻尔简化壳层示意"这行小字：底部字幕卡会把它切掉一半
+      if (!solo.on) {
+        var note = ctx.makeText('玻尔简化壳层示意', { size: 26, scale: 0.9, color: '#6f7f9a' });
+        note.position.set(0, -3.1, 0);
+        note.userData.own = true;
+        atomRoot.add(note);
+        atomParts.push(note);
+      }
     }
     buildAtom(6);
 
@@ -5940,6 +5990,7 @@ HL.registerScene({
       chamber.setVisible(true);
       chHint.visible = false;
     }
+    hintWas = chHint.visible;
 
     camera.position.set(1.9, 1.6, 30);
     camera.lookAt(1.9, 0, 0);
@@ -5953,7 +6004,7 @@ HL.registerScene({
     var ray = new THREE.Raycaster();
 
     function onMove(e) {
-      if (!params.mode) return;
+      if (!params.mode || solo.on) return;      // 独立展示时整张表不可拾取
       var r = ctx.canvas.getBoundingClientRect();
       ray.setFromCamera({
         x: ((e.clientX - r.left) / r.width) * 2 - 1,
@@ -6026,10 +6077,28 @@ HL.registerScene({
           blocks.forEach(function (b) {
             b.mesh.position.lerp(b.target, k);
           });
-          var spin = params.autoRotate ? 0.22 : 0.06;
+          var spin = solo.on ? 0.02 : (params.autoRotate ? 0.22 : 0.06);
           atomRoot.rotation.y += ddt * spin;
           atomRoot.rotation.x += ddt * spin * 0.25;
           atomRoot.visible = params.atom;
+
+          // 独立展示：电子沿各自的壳层公转（环面正对镜头，只动电子不转整体）
+          if (solo.on) {
+            for (var hi = 0; hi < atomHolders.length; hi++) {
+              atomHolders[hi].rotation.z += ddt * (0.45 + hi * 0.14) * (hi % 2 ? -1 : 1);
+            }
+          }
+
+          // 独立展示：壳层一个元素一个元素地填满（H → C → O → Fe）
+          if (solo.on) {
+            solo.t += ddt;
+            if (solo.t >= 3.4) {
+              solo.t = 0;
+              solo.i = (solo.i + 1) % ATOM_SEQ.length;
+              buildAtom(ATOM_SEQ[solo.i]);
+            }
+          }
+
           ctx.controls.autoRotate = params.autoRotate && params.mode !== 'table' && !tour.active();
 
           chamber.update(ddt, dtime);
@@ -6040,6 +6109,25 @@ HL.registerScene({
       setParam: function (key, v, user) {
         if (key === 'tour') { tour.toggle(); return; }
         if (key === 'hint') { chHint.visible = !!v; return; }
+        if (key === 'solo') {
+          solo.on = !!v;
+          params.atom = true;
+          solo.t = 0; solo.i = 0;
+          atomRoot.position.set(solo.on ? 0 : 13.4, solo.on ? 0 : -6.1, 0);
+          atomRoot.scale.setScalar(solo.on ? 1.15 : 0.52);
+          atomRoot.rotation.set(0, 0, 0);
+          blocks.forEach(function (b) { b.mesh.visible = !solo.on; });
+          if (solo.on) {
+            hintWas = chHint.visible;
+            chamber.setVisible(false);
+            chHint.visible = false;
+            buildAtom(ATOM_SEQ[0]);
+          } else {
+            chHint.visible = hintWas;
+            buildAtom(6);
+          }
+          return;
+        }
         params[key] = v;
         if (key === 'logT') chamber.setTemperature(Math.pow(10, v));
         if (key === 'refract') chamber.setRefract(v, user ? 'user' : 'init');
@@ -6061,6 +6149,7 @@ HL.registerScene({
       },
 
       onClick: function (ndc) {
+        if (solo.on) return;                    // 独立展示时整张表不可点
         ray.setFromCamera({ x: ndc.x, y: ndc.y }, camera);
         var hit = ray.intersectObjects(pickables, false);
         if (!hit.length) { HL.tooltip.hide(); unflipAll(); return; }
@@ -14207,6 +14296,16 @@ HL.registerScene({
        * 参数
        * ========================================================== */
       function setParam(k, v) {
+        // view：给速览用的"立刻落位"版本——直接摆到该展区、并把它存成 home，
+        // 之后 Journey 的相机飞行会从这个新 home 的外圈推近，不会和场景自己的
+        // 飞行动画（updateFly）抢 controls。
+        if (k === 'view') {
+          P.focus = v;
+          flyToView(v, true);
+          syncFocusButtons(v);
+          refreshNote();
+          return;
+        }
         P[k] = v;
         if (k === 'focus') { flyToView(v, T < 0.001); return; }
         if (k === 'lines' || k === 'monopole') { rebuildFieldLines(); return; }
@@ -21516,7 +21615,7 @@ HL.registerScene({
     var noHome = /[?&]home=0/.test(location.search);
     var wantJourney = /[?&]journey=1/.test(location.search);
 
-    // 跨场景播放器（「五分钟速览」）：退出后回到目录页，或回到开篇
+    // 跨场景播放器（「两分钟速览」）：退出后回到目录页，或回到开篇
     HL.journey = HL.Journey({
       loadScene: load,
       onExit: function (toHome) {

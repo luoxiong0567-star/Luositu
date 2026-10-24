@@ -41,6 +41,16 @@ HL.registerScene({
     scene.add(ctx.makeStars(1800, 400));
 
     var params = { mode: 'table', atom: true, autoRotate: false, chamber: true, flip: true, logT: 2.474, refract: true };
+
+    /* ---------- 独立展示：只留玻尔模型（速览"直给"用） ----------
+     * setParam('solo', true) 把右侧那只小模型搬到画面中心放大，并隐藏整张
+     * 周期表、样品舱与提示条；同时每 3.4 s 换一个元素（H → C → O → Fe），
+     * 壳层一个个填满，比任何展开过程都直观。离开时原样恢复。
+     * 注意：必须声明在 buildAtom 之前——create 阶段就会调用 buildAtom，
+     * 那时若 solo 还是 undefined，读 solo.on 会抛错，整个场景就装不起来了。 */
+    var ATOM_SEQ = [1, 6, 8, 26];
+    var solo = { on: false, t: 0, i: 0 };
+    var hintWas = true;
     var blocks = [];
     var pickables = [];
     var hovered = null;
@@ -106,6 +116,7 @@ HL.registerScene({
     atomRoot.scale.setScalar(0.52);
     scene.add(atomRoot);
     var atomParts = [];
+    var atomHolders = [];      // 只放"电子环"的容器，速览里让电子沿环滑动
 
     /* 共享几何/材质：电子球最多 118 个，避免每次点击反复创建销毁 GPU 资源 */
     var GEO_E = new THREE.SphereGeometry(0.085, 12, 8);
@@ -125,6 +136,7 @@ HL.registerScene({
         }
       });
       atomParts = [];
+      atomHolders = [];
     }
 
     function buildAtom(Z) {
@@ -137,11 +149,13 @@ HL.registerScene({
       }
 
       var nucleus = new THREE.Mesh(GEO_N, MAT_N);
+      // 速览里原子独占画面：核缩一圈，壳层才像示意图而不是"行星+卫星"
+      nucleus.scale.setScalar(solo.on ? 0.34 : 1);
       atomRoot.add(nucleus);
       atomParts.push(nucleus);
 
       var core = new THREE.Sprite(ctx.glowSprite('rgba(255,190,90,0.7)'));
-      core.scale.set(3, 3, 1);
+      core.scale.set(solo.on ? 0.95 : 3, solo.on ? 0.95 : 3, 1);
       atomRoot.add(core);
       atomParts.push(core);
 
@@ -149,8 +163,14 @@ HL.registerScene({
         var R = 0.95 + li * 0.62;
         var ring = new THREE.Mesh(GEO_RING, MAT_RING);   // 单位环按半径缩放，避免每壳层新建几何
         ring.scale.set(R, R, R);
-        ring.rotation.x = Math.PI / 2 + (li % 2 ? 0.5 : -0.35);
-        ring.rotation.z = li * 0.6;
+        if (solo.on) {
+          // 独立展示：环面基本正对镜头（TorusGeometry 默认躺在 XY 平面），
+          // 每层只给一点倾角，看起来才是"壳层"而不是一圈侧着的扁椭圆
+          ring.rotation.set(-0.22 + li * 0.12, li * 0.22, 0);
+        } else {
+          ring.rotation.x = Math.PI / 2 + (li % 2 ? 0.5 : -0.35);
+          ring.rotation.z = li * 0.6;
+        }
         atomRoot.add(ring);
         atomParts.push(ring);
 
@@ -164,19 +184,26 @@ HL.registerScene({
         }
         atomRoot.add(holder);
         atomParts.push(holder);
+        atomHolders.push(holder);
       });
 
-      var lb = ctx.makeText('Z = ' + Z + '　壳层 ' + shells.join('·'), { size: 34, scale: 1.1, color: '#ffcf6b' });
-      lb.position.set(0, -2.6, 0);
+      var el = HL.ELEMENTS[Z - 1];
+      var tag = (el && el[0] === Z) ? (el[2] + ' ' + el[1]) : '';
+      var maxR = 0.95 + Math.max(0, shells.length - 1) * 0.62;   // 最外层壳半径
+      var lb = ctx.makeText((tag ? tag + '　' : '') + 'Z = ' + Z + '　壳层 ' + shells.join('·'), { size: 34, scale: 1.1, color: '#ffcf6b' });
+      lb.position.set(0, solo.on ? -(maxR + 0.55) : -2.6, 0);
       lb.userData.own = true;
       atomRoot.add(lb);
       atomParts.push(lb);
 
-      var note = ctx.makeText('玻尔简化壳层示意', { size: 26, scale: 0.9, color: '#6f7f9a' });
-      note.position.set(0, -3.1, 0);
-      note.userData.own = true;
-      atomRoot.add(note);
-      atomParts.push(note);
+      // 速览里不再挂"玻尔简化壳层示意"这行小字：底部字幕卡会把它切掉一半
+      if (!solo.on) {
+        var note = ctx.makeText('玻尔简化壳层示意', { size: 26, scale: 0.9, color: '#6f7f9a' });
+        note.position.set(0, -3.1, 0);
+        note.userData.own = true;
+        atomRoot.add(note);
+        atomParts.push(note);
+      }
     }
     buildAtom(6);
 
@@ -199,6 +226,7 @@ HL.registerScene({
       chamber.setVisible(true);
       chHint.visible = false;
     }
+    hintWas = chHint.visible;
 
     camera.position.set(1.9, 1.6, 30);
     camera.lookAt(1.9, 0, 0);
@@ -212,7 +240,7 @@ HL.registerScene({
     var ray = new THREE.Raycaster();
 
     function onMove(e) {
-      if (!params.mode) return;
+      if (!params.mode || solo.on) return;      // 独立展示时整张表不可拾取
       var r = ctx.canvas.getBoundingClientRect();
       ray.setFromCamera({
         x: ((e.clientX - r.left) / r.width) * 2 - 1,
@@ -285,10 +313,28 @@ HL.registerScene({
           blocks.forEach(function (b) {
             b.mesh.position.lerp(b.target, k);
           });
-          var spin = params.autoRotate ? 0.22 : 0.06;
+          var spin = solo.on ? 0.02 : (params.autoRotate ? 0.22 : 0.06);
           atomRoot.rotation.y += ddt * spin;
           atomRoot.rotation.x += ddt * spin * 0.25;
           atomRoot.visible = params.atom;
+
+          // 独立展示：电子沿各自的壳层公转（环面正对镜头，只动电子不转整体）
+          if (solo.on) {
+            for (var hi = 0; hi < atomHolders.length; hi++) {
+              atomHolders[hi].rotation.z += ddt * (0.45 + hi * 0.14) * (hi % 2 ? -1 : 1);
+            }
+          }
+
+          // 独立展示：壳层一个元素一个元素地填满（H → C → O → Fe）
+          if (solo.on) {
+            solo.t += ddt;
+            if (solo.t >= 3.4) {
+              solo.t = 0;
+              solo.i = (solo.i + 1) % ATOM_SEQ.length;
+              buildAtom(ATOM_SEQ[solo.i]);
+            }
+          }
+
           ctx.controls.autoRotate = params.autoRotate && params.mode !== 'table' && !tour.active();
 
           chamber.update(ddt, dtime);
@@ -299,6 +345,25 @@ HL.registerScene({
       setParam: function (key, v, user) {
         if (key === 'tour') { tour.toggle(); return; }
         if (key === 'hint') { chHint.visible = !!v; return; }
+        if (key === 'solo') {
+          solo.on = !!v;
+          params.atom = true;
+          solo.t = 0; solo.i = 0;
+          atomRoot.position.set(solo.on ? 0 : 13.4, solo.on ? 0 : -6.1, 0);
+          atomRoot.scale.setScalar(solo.on ? 1.15 : 0.52);
+          atomRoot.rotation.set(0, 0, 0);
+          blocks.forEach(function (b) { b.mesh.visible = !solo.on; });
+          if (solo.on) {
+            hintWas = chHint.visible;
+            chamber.setVisible(false);
+            chHint.visible = false;
+            buildAtom(ATOM_SEQ[0]);
+          } else {
+            chHint.visible = hintWas;
+            buildAtom(6);
+          }
+          return;
+        }
         params[key] = v;
         if (key === 'logT') chamber.setTemperature(Math.pow(10, v));
         if (key === 'refract') chamber.setRefract(v, user ? 'user' : 'init');
@@ -320,6 +385,7 @@ HL.registerScene({
       },
 
       onClick: function (ndc) {
+        if (solo.on) return;                    // 独立展示时整张表不可点
         ray.setFromCamera({ x: ndc.x, y: ndc.y }, camera);
         var hit = ray.intersectObjects(pickables, false);
         if (!hit.length) { HL.tooltip.hide(); unflipAll(); return; }
