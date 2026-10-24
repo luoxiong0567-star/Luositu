@@ -543,10 +543,10 @@ input[type=range]::-webkit-slider-thumb {
 (function () {
   if (!/[?&]sharecode=/.test(location.search)) return;
   if (/single\.html/.test(location.pathname)) return;
-  location.replace('single.html' + location.search);
+  location.replace('single.html' + location.search + location.hash);
 })();
 </script>
-<!-- 人类之光 · 单文件自包含版 · 构建于 2026-10-24 11:21 -->
+<!-- 人类之光 · 单文件自包含版 · 构建于 2026-10-24 11:29 -->
 </head>
 <body>
 <div id="app">

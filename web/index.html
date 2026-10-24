@@ -15,7 +15,7 @@
 (function () {
   if (!/[?&]sharecode=/.test(location.search)) return;
   if (/single\.html/.test(location.pathname)) return;
-  location.replace('single.html' + location.search);
+  location.replace('single.html' + location.search + location.hash);
 })();
 </script>
 </head>
