@@ -12,6 +12,7 @@ _nn_out.txt
 _cloud_out.txt
 _probe_out.txt
 _agent_out.txt
+_t1_out.txt
 _gitfind*.txt
 _thumbs_log.txt
 _build_log.txt

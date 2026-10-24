@@ -517,3 +517,32 @@ input[type=range]::-webkit-slider-thumb {
   .hl-wall-list { grid-template-columns: 1fr; }
 }
 
+
+/* ---------------- 太阳系 HUD（模拟日期 / 时间流速 / 尺度） ---------------- */
+.solar-hud {
+  position: absolute; left: 24px; bottom: 58px; z-index: 4;
+  padding: 10px 15px 11px;
+  background: rgba(8, 13, 26, .55);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.solar-hud .sh-date {
+  font-size: 17px; letter-spacing: .10em; color: var(--text);
+  text-shadow: 0 0 16px rgba(77, 226, 255, .35);
+}
+.solar-hud .sh-speed { margin-top: 4px; font-size: 11px; color: var(--muted); }
+.solar-hud .sh-speed b { color: var(--accent); font-size: 13px; font-weight: 600; }
+.solar-hud .sh-scale { margin-top: 2px; font-size: 10.5px; color: #5d7391; letter-spacing: .02em; }
+.solar-hud .sh-key {
+  margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(120, 180, 255, .12);
+  font-size: 9.5px; color: #4c688b; letter-spacing: .02em;
+}
+@media (max-width: 760px) {
+  .solar-hud { left: 14px; bottom: 46px; padding: 8px 12px; }
+  .solar-hud .sh-date { font-size: 14px; }
+  .solar-hud .sh-key { display: none; }
+}

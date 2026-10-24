@@ -146,7 +146,9 @@
       if (s.pulse) {
         var p = ensurePulse();
         p.visible = true;
-        var pr = s.r || DEF_R;
+        // r 支持数字或函数：尺度可切换的场景（如太阳系真实比例）需要按当前尺度算半径
+        var pr = (typeof s.r === 'function') ? s.r() : (s.r || DEF_R);
+        if (!isFinite(pr) || pr <= 0) pr = DEF_R;
         p.userData.rings.scale.setScalar(pr);
       } else if (pulse) pulse.visible = false;
 
