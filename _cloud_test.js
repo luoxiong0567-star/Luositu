@@ -79,13 +79,40 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const r = await send('Runtime.evaluate', {
       expression: expr, returnByValue: true, awaitPromise: true
     });
-    if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
+    if (r.exceptionDetails) {
+      const d = r.exceptionDetails;
+      const desc = (d.exception && (d.exception.description || d.exception.value)) || d.text;
+      throw new Error('eval: ' + String(desc).split('\n').slice(0, 4).join(' | '));
+    }
     return r.result.value;
   }
 
   await send('Page.enable');
   await send('Runtime.enable');
-  await sleep(mode === 'live' ? 7000 : 3500);
+  // 线上单文件 2.3 MB，固定等待不够稳：轮询到脚本就绪（最多 25s）
+  let ready = false;
+  for (let i = 0; i < 50; i++) {
+    await sleep(500);
+    try {
+      ready = await evalJs("!!window.HL && !!document.getElementById('gallery') && document.querySelectorAll('.gal-card').length > 0");
+    } catch (e) { ready = false; }
+    if (ready) break;
+  }
+  if (!ready) {
+    const diag = await evalJs("JSON.stringify({rs:document.readyState, hl:!!window.HL, gal:!!document.getElementById('gallery'), scripts:document.scripts.length})");
+    console.log('ERR 页面未就绪 ' + diag);
+    child.kill();
+    process.exit(1);
+  }
+
+  // 线上要等 SDK 载入 + 首次查询返回；探针会在 status 仍为 loading 时误判
+  if (mode === 'live') {
+    for (let i = 0; i < 40; i++) {
+      const st = await evalJs("(window.HL && HL.Cloud) ? HL.Cloud.status() : 'no-module'");
+      if (st === 'ready' || st === 'error') break;
+      await sleep(500);
+    }
+  }
 
   const results = [];
   const probe = `(function(){
@@ -97,6 +124,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       scenes: HL.allScenes().length,
       cards: document.querySelectorAll('.gal-card').length,
       wall: !!w,
+      hasCloud: !!(window.HL && HL.Cloud),
+      galLen: (document.getElementById('gallery')||{}).innerHTML ? document.getElementById('gallery').innerHTML.length : -1,
       status: st,
       stateText: s ? s.textContent : null,
       notes: document.querySelectorAll('.hl-note').length,
@@ -105,6 +134,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   })()`;
 
   const a = await evalJs(probe);
+  if (!a.wall) {
+    console.log(JSON.stringify(a, null, 2));
+    console.log('ERR 留言板未挂载，终止后续断言');
+    ws.close(); child.kill(); process.exit(1);
+  }
   results.push(['场景数量 14', a.scenes === 14, 'scenes=' + a.scenes]);
   results.push(['目录卡片 14', a.cards === 14, 'cards=' + a.cards]);
   results.push(['留言板已挂载', a.wall === true, 'wall=' + a.wall]);
