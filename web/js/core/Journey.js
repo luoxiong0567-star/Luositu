@@ -35,6 +35,9 @@
   function ease(k) {
     return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
   }
+  // beat.ease：'in' 越飞越快（冲进银心这类加速推进），'out' 落位前减速（到站刹车），缺省 easeInOut
+  function easeIn(k) { return k * k * k; }
+  function easeOut(k) { return 1 - Math.pow(1 - k, 3); }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
   HL.Journey = function (opt) {
@@ -260,17 +263,34 @@
         end.target.y -= b.lift * worldPerPx;
       }
 
-      var start = {
-        theta: end.theta - 0.42,
-        phi: clamp(end.phi * 0.92, 0.06, Math.PI - 0.06),
-        radius: clamp(end.radius * 1.55, c.minDistance, c.maxDistance),
-        target: end.target.clone()
-      };
+      // 入场起点：默认从落点外侧"甩进来"；b.from === 'hold' 时从当前相机状态
+      // 直接续飞（上一镜的终点就是这一镜的起点），用于跨镜连续推进不跳变
+      var start;
+      if (b.from === 'hold') {
+        start = {
+          theta: c._theta,
+          phi: c._phi,
+          radius: c._radius,
+          target: (c.target ? c.target.clone() : end.target.clone())
+        };
+        // 上一镜可能还在飞（本镜 ms 太短）：从上一镜已写入的插值状态起，依然连续
+        if (start.radius == null || !isFinite(start.radius)) {
+          start = { theta: end.theta, phi: end.phi, radius: end.radius * 1.3, target: end.target.clone() };
+        }
+      } else {
+        start = {
+          theta: end.theta - 0.42,
+          phi: clamp(end.phi * 0.92, 0.06, Math.PI - 0.06),
+          radius: clamp(end.radius * 1.55, c.minDistance, c.maxDistance),
+          target: end.target.clone()
+        };
+      }
 
       var dur = b.fly || 2400, t = 0;
+      var ef = b.ease === 'in' ? easeIn : (b.ease === 'out' ? easeOut : ease);
       fly = function (dt) {
         t += dt * 1000;
-        var e = ease(clamp(t / dur, 0, 1));
+        var e = ef(clamp(t / dur, 0, 1));
         c._theta = start.theta + (end.theta - start.theta) * e;
         c._phi = start.phi + (end.phi - start.phi) * e;
         c._radius = start.radius + (end.radius - start.radius) * e;
