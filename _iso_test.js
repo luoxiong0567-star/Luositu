@@ -124,8 +124,34 @@ function httpReq(url, method) {
     log('── ' + sid.padEnd(12) + (ok ? 'PASS' : 'FAIL') + '  ' + (v.title || '') + (r.errors.length ? '  !! ' + r.errors[0] : ''));
   }
 
-  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ 单文件隔离冒烟全部通过  (' + (fs.statSync(isoFile).size / 1048576).toFixed(2) + ' MB)');
-  fs.writeFileSync(path.join(ROOT, '_iso_out.txt'), LOG.join('\n'), 'utf8');
+  /* D. 数学模型（DOM 展示层）：四章 + KaTeX + 四张画布 + 页签切换 */
+  {
+    const r = await open('#math', `(function(){
+      var st = window.__MATH ? __MATH.state() : null;
+      if (!st) return JSON.stringify({ no: 'no __MATH' });
+      __MATH.go(2);
+      __MATH.tab(2, 2);
+      var boxes = Array.prototype.map.call(document.querySelectorAll('.ml-cv canvas'), function(c){
+        return [c.width, c.height];
+      });
+      return JSON.stringify({
+        secs: st.secs, canvases: st.canvases, katex: st.katex,
+        lab: document.getElementById('stage').classList.contains('lab-mode'),
+        boxes: boxes,
+        tabs: document.querySelectorAll('.ml-ftab').length,
+        dot: (document.querySelector('.ml-stat b')||{}).textContent || ''
+      });
+    })()`, 5200);
+    const v = r.val || {};
+    const painted = (v.boxes || []).filter(b => b[0] > 100 && b[1] > 100).length;
+    const ok = v.secs === 4 && v.canvases === 4 && v.katex >= 3 && v.lab && painted === 4 &&
+      v.tabs >= 8 && !r.errors.length;
+    if (!ok) bad++;
+    log('── math       ' + (ok ? 'PASS' : 'FAIL') + '  secs=' + v.secs + ' canvas=' + painted + '/4 katex=' + v.katex +
+      ' tabs=' + v.tabs + ' lab=' + v.lab + (r.errors.length ? '  !! ' + r.errors[0] : ''));
+  }
+
+  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ 单文件隔离冒烟全部通过  (' + (fs.statSync(isoFile).size / 1048576).toFixed(2) + ' MB)');  fs.writeFileSync(path.join(ROOT, '_iso_out.txt'), LOG.join('\n'), 'utf8');
   try { child.kill(); } catch (e) {}
   process.exit(0);
 })().catch(e => { console.log('FATAL ' + e.message); process.exit(1); });

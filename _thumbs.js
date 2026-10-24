@@ -13,11 +13,17 @@ const WAIT = 7000;                // 每场景渲染等待（ms）
 const QUALITY = 58;               // JPEG 质量
 
 // 每个场景的标志性画面（URL 参数 + 场景 id）
+// math 是 DOM 展示层（没有 3D 画布）：先滚到第一章，再截 .mlab 顶部 16:9 区域
+// 用法：node _thumbs.js            全部重拍
+//       node _thumbs.js math       只重拍指定场景（合并进已有 thumbs.js，不清空其它）
 const SHOTS = [
   { id: 'solar', q: '' },
   { id: 'periodic', q: '?chamber=1&Z=26' },
   { id: 'neural', q: '' },
-  { id: 'math', q: '' },
+  {
+    id: 'math', q: '', dom: '.mlab', ratio: true,
+    pre: 'document.querySelector(".ml-scroll").scrollTop = document.querySelectorAll(".ml-sec")[0].offsetTop - 6;'
+  },
   { id: 'interference', q: '' },
   { id: 'molecule', q: '' },
   { id: 'animalcell', q: '' },
@@ -44,6 +50,10 @@ function httpReq(url, method) {
 }
 
 async function main() {
+  const ONLY = process.argv.slice(2);
+  const list = ONLY.length ? SHOTS.filter(s => ONLY.indexOf(s.id) >= 0) : SHOTS;
+  if (!list.length) { console.log('no such scene: ' + ONLY.join(',')); process.exit(1); }
+
   const child = execFile(EDGE, [
     '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=swiftshader',
     '--no-first-run', '--disable-features=msEdgeNewTabPage',
@@ -65,7 +75,7 @@ async function main() {
   if (!tabs || !tabs.length) { console.log('ERR: CDP not ready'); child.kill(); process.exit(1); }
 
   const out = {};
-  for (const s of SHOTS) {
+  for (const s of list) {
     const url = 'file:///' + ROOT + '/web/index.html' + s.q + '#' + s.id;
     const t = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/new?' + encodeURIComponent(url), 'PUT'));
     const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -95,14 +105,23 @@ async function main() {
       { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     await new Promise(r => setTimeout(r, WAIT));
 
-    // 隐藏 UI 遮层，取 canvas 实际矩形
+    // 场景预处理（如滚到指定章节），再给画布 / 布局一点时间稳下来
+    if (s.pre) {
+      await send('Runtime.evaluate', { expression: s.pre });
+      await new Promise(r => setTimeout(r, 1300));
+    }
+
+    // 隐藏 UI 遮层，取 canvas（或 DOM 展示层）实际矩形
+    const sel = s.dom ? JSON.stringify(s.dom) : null;
     const rect = await send('Runtime.evaluate', {
       expression: `(function(){
         var st=document.createElement('style');
         st.textContent='#panel,#titlebar,#hint,#tooltip,#gravHud{display:none !important}';
         document.head.appendChild(st);
-        var r=document.getElementById('gl').getBoundingClientRect();
-        return JSON.stringify({x:r.left,y:r.top,w:r.width,h:r.height});
+        var el=${sel ? 'document.querySelector(' + sel + ')' : "document.getElementById('gl')"};
+        var r=el.getBoundingClientRect();
+        var hh=${s.ratio ? 'Math.round(r.width*9/16)' : 'r.height'};
+        return JSON.stringify({x:r.left,y:r.top,w:r.width,h:hh});
       })()`, returnByValue: true
     });
     const r = JSON.parse(rect.result.value);
@@ -122,11 +141,25 @@ async function main() {
     await httpReq('http://127.0.0.1:' + PORT + '/json/close/' + t.id).catch(() => {});
   }
 
+  const target = path.join(ROOT, 'web/js/data/thumbs.js');
+
+  // 只重拍部分场景时，把结果合并进已有 thumbs.js，避免其它场景被清空
+  if (ONLY.length && fs.existsSync(target)) {
+    const src = fs.readFileSync(target, 'utf8');
+    const m = src.match(/HL\.THUMBS = ([\s\S]*?);\s*\}\)\(window\);/);
+    if (m) {
+      try {
+        const prev = JSON.parse(m[1]);
+        Object.keys(prev).forEach(k => { if (!out[k]) out[k] = prev[k]; });
+        console.log('MERGED with existing ' + Object.keys(prev).length + ' shots');
+      } catch (e) { console.log('WARN: 已有 thumbs.js 解析失败，按全量写出'); }
+    }
+  }
+
   const body = '// 自动生成：场景缩略图（CDP 真实渲染截图，JPEG data URI）\n' +
     '// 重新生成：node _thumbs.js\n' +
     '(function (global) {\n  var HL = global.HL = global.HL || {};\n  HL.THUMBS = ' +
     JSON.stringify(out, null, 2) + ';\n})(window);\n';
-  const target = path.join(ROOT, 'web/js/data/thumbs.js');
   fs.writeFileSync(target, body, 'utf8');
   console.log('WROTE ' + target + '  ' + (fs.statSync(target).size / 1024).toFixed(1) + ' KB');
 
