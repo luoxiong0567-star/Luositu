@@ -15,7 +15,7 @@
 HL.registerScene({
   id: 'neuralnet',
   name: '神经网络推理',
-  short: '12 项训练参数 → 多层全连接 → 8 类训练诊断',
+  short: '28 项训练参数 → 多层全连接 → 8 类训练诊断',
   icon: '◈',
   fov: 46,
   minDistance: 4,
@@ -42,7 +42,7 @@ HL.registerScene({
 
     var loading = document.createElement('div');
     loading.className = 'embed-loading';
-    loading.innerHTML = '<i></i><b>正在载入神经网络推理大屏</b><span>9 → 12 → 8 → 5 · forward pass</span>';
+    loading.innerHTML = '<i></i><b>正在载入神经网络推理大屏</b><span>28 params → dense layers → 8 diagnoses</span>';
 
     wrap.appendChild(frame);
     wrap.appendChild(loading);

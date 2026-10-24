@@ -7,6 +7,8 @@ _iso/
 _grav_out.txt
 _iso_out.txt
 _diag_out.txt
+_gal_out.txt
+_nn_out.txt
 _gitfind*.txt
 _thumbs_log.txt
 _build_log.txt

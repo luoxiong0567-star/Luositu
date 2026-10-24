@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人类之光 · 作品介绍</title>
+<style>
+  :root{
+    --bg:#05070f;
+    --bg2:#0a0f1e;
+    --line:rgba(120,180,255,.14);
+    --line2:rgba(120,180,255,.30);
+    --accent:#4de2ff;
+    --gold:#ffcf6b;
+    --text:#dce7f5;
+    --muted:#7b8aa5;
+    --card:linear-gradient(158deg, rgba(15,23,42,.94), rgba(6,9,18,.72));
+    --sans:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB","Segoe UI",sans-serif;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--sans);
+    font-size:16px; line-height:1.78; -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  ::selection{background:rgba(77,226,255,.26); color:#fff}
+
+  /* 顶部滚动进度 */
+  #prog{position:fixed;top:0;left:0;height:2px;width:0;z-index:120;
+    background:linear-gradient(90deg,var(--accent),var(--gold));box-shadow:0 0 12px rgba(77,226,255,.7)}
+
+  /* ---------- 导航 ---------- */
+  nav{position:sticky;top:0;z-index:100;
+    background:linear-gradient(180deg, rgba(5,7,15,.92) 0%, rgba(5,7,15,.58) 100%);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+  nav .inner{max-width:1180px;margin:0 auto;padding:0 32px;height:54px;
+    display:flex;align-items:center;justify-content:space-between;gap:24px}
+  .brand{display:flex;align-items:center;gap:9px;font-size:13px;letter-spacing:.16em;color:#bcd2ea;white-space:nowrap}
+  .brand i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);display:block}
+  .links{display:flex;gap:22px;overflow-x:auto;scrollbar-width:none}
+  .links::-webkit-scrollbar{display:none}
+  .links a{color:var(--muted);text-decoration:none;font-size:12.5px;letter-spacing:.06em;white-space:nowrap;transition:color .2s}
+  .links a:hover{color:var(--accent)}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+
+  /* ---------- Hero ---------- */
+  .hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden;
+    margin-top:-54px;padding-top:54px;border-bottom:1px solid var(--line)}
+  .hero::before{content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:
+      radial-gradient(1.7px 1.7px at 12% 22%, rgba(255,255,255,.8), transparent),
+      radial-gradient(1.3px 1.3px at 26% 66%, rgba(180,220,255,.62), transparent),
+      radial-gradient(1.1px 1.1px at 38% 16%, rgba(255,255,255,.5), transparent),
+      radial-gradient(1.8px 1.8px at 52% 78%, rgba(200,235,255,.72), transparent),
+      radial-gradient(1.2px 1.2px at 64% 34%, rgba(255,255,255,.55), transparent),
+      radial-gradient(1.4px 1.4px at 73% 12%, rgba(180,220,255,.5), transparent),
+      radial-gradient(1.1px 1.1px at 81% 58%, rgba(255,255,255,.45), transparent),
+      radial-gradient(1.9px 1.9px at 89% 30%, rgba(255,255,255,.7), transparent),
+      radial-gradient(1.2px 1.2px at 94% 72%, rgba(180,220,255,.5), transparent),
+      radial-gradient(1.3px 1.3px at 7% 84%, rgba(255,255,255,.42), transparent),
+      radial-gradient(1px 1px at 45% 44%, rgba(255,255,255,.35), transparent),
+      radial-gradient(1px 1px at 68% 88%, rgba(255,255,255,.3), transparent);
+    background-repeat:no-repeat;
+  }
+  .hero::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(120,180,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,180,255,.05) 1px, transparent 1px);
+    background-size:74px 74px;
+    -webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 42%, #000 15%, transparent 80%);
+    mask-image:radial-gradient(ellipse 70% 60% at 50% 42%, #000 15%, transparent 80%);
+  }
+  .glow{position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse 60% 44% at 50% -6%, rgba(77,226,255,.16), transparent 70%),
+      radial-gradient(ellipse 42% 34% at 86% 92%, rgba(255,207,107,.07), transparent 70%);
+  }
+  .hero .wrap{position:relative;z-index:2;padding-top:70px;padding-bottom:70px}
+  .eyebrow{display:flex;align-items:center;gap:14px;font-size:11.5px;letter-spacing:.28em;
+    color:#8fb4d6;text-transform:uppercase;margin-bottom:26px}
+  .eyebrow::before{content:'';width:44px;height:1px;background:linear-gradient(90deg,var(--accent),transparent)}
+  h1{font-size:clamp(46px,8.6vw,104px);font-weight:200;letter-spacing:.12em;line-height:1.06;
+    background:linear-gradient(176deg,#ffffff 4%,#d7ecff 42%,#63ccea 96%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:6px}
+  .en{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);letter-spacing:.62em;
+    color:#5f7b9c;margin-bottom:34px;text-transform:uppercase}
+  .lead{max-width:720px;font-size:clamp(15px,1.55vw,18px);line-height:1.95;color:#b6c8dd}
+  .lead b{color:#e8f3ff;font-weight:500}
+  .lead em{font-style:normal;color:var(--accent)}
+  .meta{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:34px;font-size:12.5px;color:var(--muted);letter-spacing:.06em}
+  .meta span{display:flex;align-items:center;gap:8px}
+  .meta span::before{content:'';width:3px;height:3px;border-radius:50%;background:#3f5c80}
+
+  .stats{display:flex;flex-wrap:wrap;gap:0;margin-top:64px;border-top:1px solid var(--line);padding-top:26px}
+  .stat{flex:1 1 130px;padding-right:24px;position:relative}
+  .stat + .stat{padding-left:24px;border-left:1px solid rgba(120,180,255,.1)}
+  .stat b{display:block;font-size:31px;font-weight:300;color:#eaf6ff;letter-spacing:.02em;font-family:var(--mono)}
+  .stat b small{font-size:13px;color:var(--muted);margin-left:5px;font-family:var(--sans);letter-spacing:.06em}
+  .stat span{font-size:11.5px;color:var(--muted);letter-spacing:.16em}
+
+  /* ---------- 通用 section ---------- */
+  section{position:relative;padding:96px 0;border-top:1px solid rgba(120,180,255,.07)}
+  section:first-of-type{border-top:none}
+  .sec-head{display:flex;align-items:flex-end;gap:18px;margin-bottom:44px;flex-wrap:wrap}
+  .sec-num{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.22em;padding-bottom:7px}
+  .sec-head h2{font-size:clamp(23px,3vw,33px);font-weight:400;letter-spacing:.05em;line-height:1.3}
+  .sec-head p{flex:0 0 100%;width:100%;max-width:700px;color:var(--muted);font-size:14px;line-height:1.9;margin-top:6px}
+
+  /* ---------- 三句话 ---------- */
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .tcard{position:relative;padding:30px 26px;border:1px solid var(--line);border-radius:14px;
+    background:var(--card);transition:border-color .3s,transform .3s,box-shadow .3s}
+  .tcard:hover{border-color:rgba(77,226,255,.36);transform:translateY(-3px);
+    box-shadow:0 20px 50px -26px rgba(77,226,255,.4)}
+  .tcard i{display:block;font-style:normal;font-family:var(--mono);font-size:11px;letter-spacing:.2em;
+    color:var(--accent);opacity:.8;margin-bottom:16px}
+  .tcard h3{font-size:16.5px;font-weight:500;margin-bottom:10px;color:#e9f4ff;line-height:1.5}
+  .tcard p{font-size:13.5px;color:#93a7c0;line-height:1.85}
+
+  .notis{margin-top:26px;padding:22px 26px;border-left:2px solid rgba(255,207,107,.5);
+    background:linear-gradient(90deg,rgba(255,207,107,.05),transparent 60%);border-radius:0 10px 10px 0}
+  .notis p{font-size:13.5px;color:#a8b8cc;line-height:1.9}
+  .notis b{color:var(--gold);font-weight:500}
+
+  /* ---------- 四章 ---------- */
+  .chapters{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+  .chap{position:relative;padding:30px 30px 26px;border:1px solid var(--line);border-radius:16px;
+    background:var(--card);overflow:hidden;transition:border-color .3s,box-shadow .3s}
+  .chap:hover{border-color:rgba(77,226,255,.34);box-shadow:0 22px 60px -34px rgba(77,226,255,.5)}
+  .chap .rom{position:absolute;right:16px;top:-26px;font-size:158px;font-weight:700;line-height:1;
+    color:rgba(120,180,255,.062);pointer-events:none;font-family:Georgia,"Times New Roman",serif}
+  .chap h3{position:relative;font-size:19px;font-weight:500;letter-spacing:.06em;margin-bottom:4px}
+  .chap .sub{position:relative;font-size:11.5px;color:var(--muted);letter-spacing:.15em;margin-bottom:20px}
+  .chap ul{position:relative;list-style:none;display:flex;flex-direction:column;gap:11px}
+  .chap li{font-size:13.5px;line-height:1.7;color:#8ea3bd;padding-left:16px;position:relative}
+  .chap li::before{content:'';position:absolute;left:0;top:10px;width:5px;height:1px;background:rgba(77,226,255,.55)}
+  .chap li b{display:block;color:#dbe9f8;font-weight:500;font-size:14px;margin-bottom:1px}
+  .chap .quote{position:relative;margin-top:20px;padding-top:16px;border-top:1px dashed rgba(120,180,255,.14);
+    font-size:12.5px;color:#6f86a3;line-height:1.8;font-style:normal}
+
+  /* ---------- 重点场景 ---------- */
+  .hl-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+  .hlcard{padding:28px;border:1px solid var(--line);border-radius:14px;background:var(--card);
+    transition:border-color .3s,transform .3s}
+  .hlcard:hover{border-color:rgba(77,226,255,.34);transform:translateY(-2px)}
+  .hlcard .hd{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .hlcard .ico{width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border-radius:10px;
+    font-size:17px;line-height:1;color:var(--accent);background:rgba(77,226,255,.08);border:1px solid rgba(77,226,255,.2)}
+  .hlcard h3{font-size:16px;font-weight:500;color:#eaf5ff}
+  .hlcard h3 small{display:block;font-size:11px;color:var(--muted);letter-spacing:.14em;font-weight:400;margin-top:3px}
+  .hlcard p{font-size:13.5px;color:#93a7c0;line-height:1.85}
+  .hlcard .foot{margin-top:14px;display:flex;flex-wrap:wrap;gap:7px}
+
+  .chip{display:inline-block;padding:3px 9px;border:1px solid rgba(120,180,255,.22);border-radius:999px;
+    font-size:11px;color:#9bb3d1;letter-spacing:.05em;white-space:nowrap}
+
+  /* ---------- 大屏 ---------- */
+  .screen{display:grid;grid-template-columns:1.16fr .84fr;border:1px solid var(--line);
+    border-radius:18px;overflow:hidden;background:var(--card);margin-bottom:22px;
+    transition:border-color .3s,box-shadow .3s}
+  .screen:hover{border-color:rgba(77,226,255,.34);box-shadow:0 26px 70px -40px rgba(77,226,255,.55)}
+  .screen .txt{padding:32px 34px}
+  .screen .tag{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:10.5px;
+    letter-spacing:.2em;color:var(--gold);margin-bottom:16px}
+  .screen .tag s{width:26px;height:1px;background:var(--gold);opacity:.5;text-decoration:none}
+  .screen h3{font-size:20px;font-weight:400;letter-spacing:.04em;margin-bottom:6px;color:#eff8ff}
+  .screen .sub{font-size:11.5px;color:var(--muted);letter-spacing:.16em;margin-bottom:18px;font-family:var(--mono)}
+  .screen .p{font-size:13.5px;color:#96aac3;line-height:1.88;margin-bottom:16px}
+  .screen ul{list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+  .screen li{font-size:13px;color:#93a7c0;line-height:1.72;padding-left:15px;position:relative}
+  .screen li::before{content:'▸';position:absolute;left:0;top:0;color:rgba(77,226,255,.6);font-size:10px}
+  .screen li b{color:#dbe9f8;font-weight:500}
+  .screen .viz{position:relative;border-left:1px solid rgba(120,180,255,.1);
+    background:radial-gradient(ellipse 90% 80% at 50% 100%, rgba(77,226,255,.11), transparent 72%);
+    display:grid;place-items:center;padding:20px;min-height:290px}
+  .screen .viz svg{width:100%;height:auto;max-width:340px;overflow:visible}
+  .viz .cap{position:absolute;bottom:14px;left:0;right:0;text-align:center;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:#546d8c}
+
+  .flow{stroke-dasharray:4 9;animation:dash 2.6s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-26}}
+  .spin{transform-origin:150px 145px;animation:spin 26s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .pulse{animation:pulse 3.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+  /* ---------- 小卡组 ---------- */
+  .mini{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .mc{padding:22px 22px 20px;border:1px solid var(--line);border-radius:12px;
+    background:linear-gradient(160deg,rgba(14,21,38,.8),rgba(6,9,18,.5));
+    transition:border-color .25s,background .25s}
+  .mc:hover{border-color:rgba(77,226,255,.3);background:linear-gradient(160deg,rgba(18,28,50,.9),rgba(7,11,22,.6))}
+  .mc b{display:block;font-size:14px;font-weight:500;color:#e2effc;margin-bottom:7px;letter-spacing:.02em}
+  .mc p{font-size:12.5px;color:#869bb5;line-height:1.8}
+  .mc .k{display:inline-block;margin-bottom:12px;font-family:var(--mono);font-size:10px;
+    letter-spacing:.16em;color:rgba(77,226,255,.75)}
+
+  /* ---------- 索引表 ---------- */
+  .tblwrap{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:rgba(8,12,22,.5)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{text-align:left;padding:14px 16px;font-size:10.5px;letter-spacing:.18em;font-weight:500;
+    color:var(--muted);border-bottom:1px solid var(--line2);background:rgba(10,16,30,.8);white-space:nowrap}
+  tbody td{padding:13px 16px;border-bottom:1px solid rgba(120,180,255,.07);color:#93a7c0;vertical-align:top;line-height:1.65}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:rgba(77,226,255,.035)}
+  td.n{font-family:var(--mono);font-size:12px;color:#4c688b}
+  td.name{color:#dce9f7;font-weight:500;white-space:nowrap}
+  td.name em{font-style:normal;margin-right:7px;color:var(--accent);opacity:.85}
+  td.key{text-align:center}
+  .kbd{display:inline-block;min-width:24px;padding:2px 7px;border:1px solid rgba(120,180,255,.26);
+    border-radius:5px;font-family:var(--mono);font-size:11px;color:var(--accent);background:rgba(77,226,255,.05)}
+  .ch-tag{font-family:var(--mono);font-size:11px;color:#7c93ae;white-space:nowrap}
+
+  /* ---------- 使用 ---------- */
+  .use{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .panel{padding:28px 30px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+  .panel h3{font-size:15px;font-weight:500;margin-bottom:16px;color:#e7f3ff;letter-spacing:.04em}
+  .panel ol,.panel ul{list-style:none;counter-reset:s}
+  .panel ol li{counter-increment:s;position:relative;padding-left:30px;font-size:13.5px;color:#93a7c0;
+    line-height:1.8;margin-bottom:11px}
+  .panel ol li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:1px;
+    font-family:var(--mono);font-size:11px;color:rgba(77,226,255,.7)}
+  .panel ul li{position:relative;padding-left:16px;font-size:13.5px;color:#93a7c0;line-height:1.8;margin-bottom:10px}
+  .panel ul li::before{content:'';position:absolute;left:0;top:11px;width:5px;height:1px;background:rgba(77,226,255,.5)}
+  .panel code{font-family:var(--mono);font-size:12px;color:var(--gold);background:rgba(255,207,107,.08);
+    padding:2px 6px;border-radius:4px}
+
+  /* ---------- footer ---------- */
+  footer{padding:76px 0 60px;border-top:1px solid var(--line);text-align:center;
+    background:radial-gradient(ellipse 60% 100% at 50% 100%, rgba(77,226,255,.05), transparent 70%)}
+  footer .q{font-size:clamp(14px,1.8vw,17px);color:#9fb4cc;letter-spacing:.08em;line-height:2.1;margin-bottom:26px}
+  footer .sig{font-family:var(--mono);font-size:11px;letter-spacing:.24em;color:#4f6885}
+  footer .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);margin:0 auto 22px;
+    box-shadow:0 0 14px var(--accent);opacity:.85}
+
+  /* 进场动画 */
+  .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+
+  @media (max-width:980px){
+    .three,.mini{grid-template-columns:1fr}
+    .chapters,.hl-grid{grid-template-columns:1fr}
+    .screen{grid-template-columns:1fr}
+    .screen .viz{border-left:none;border-top:1px solid rgba(120,180,255,.1);min-height:230px}
+    .use{grid-template-columns:1fr}
+    .hero{min-height:auto;padding:54px 0 46px;margin-top:-54px}
+    .hero .wrap{padding-top:40px;padding-bottom:40px}
+    .stat{flex:1 1 46%;margin-bottom:22px}
+    .stat:nth-child(odd){padding-left:0;border-left:none}
+    section{padding:64px 0}
+  }
+  @media (max-width:620px){
+    .wrap{padding:0 20px}
+    nav .inner{padding:0 20px;gap:14px}
+    .links{gap:15px}
+    .links a:nth-child(n+5){display:none}
+    .lead{font-size:14.5px}
+    .stat b{font-size:25px}
+    table{font-size:12.5px}
+    thead th,tbody td{padding:10px 11px}
+    td.name{white-space:normal}
+    .screen .txt{padding:24px 22px}
+    .hlcard,.chap,.panel{padding:22px}
+  }
+</style>
+</head>
+<body>
+<div id="prog"></div>
+
+<nav>
+  <div class="inner">
+    <div class="brand"><i></i>HUMAN&nbsp;LIGHT</div>
+    <div class="links">
+      <a href="#about">概览</a>
+      <a href="#chapters">四章</a>
+      <a href="#scenes">场景</a>
+      <a href="#screens">大屏</a>
+      <a href="#ux">交互</a>
+      <a href="#eng">工程</a>
+      <a href="#index">索引</a>
+      <a href="#use">打开</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="glow"></div>
+  <div class="wrap">
+    <div class="eyebrow">三维科学可视化 · 作品介绍</div>
+    <h1>人类之光</h1>
+    <div class="en">Human&nbsp;Light</div>
+    <p class="lead">
+      十四个场景，四章叙事。从行星的轨道到元素周期表，从双缝后慢慢堆出的干涉条纹，到神经网络里逐层点亮的信号——它们都在<em>点开就能用</em>的网页里，<b>可以拨动、可以暂停、可以一步一步走完</b>。
+    </p>
+    <div class="meta">
+      <span>作者 罗司徒</span>
+      <span>纯 HTML 单文件</span>
+      <span>全程离线 · 零依赖</span>
+      <span>桌面与手机浏览器通用</span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>14<small>个</small></b><span>可视化场景</span></div>
+      <div class="stat"><b>4<small>章</small></b><span>叙事结构</span></div>
+      <div class="stat"><b>89<small>幕</small></b><span>分步讲解</span></div>
+      <div class="stat"><b>2<small>块</small></b><span>交互大屏</span></div>
+      <div class="stat"><b>2.3<small>MB</small></b><span>单文件体积</span></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ================= 01 概览 ================= -->
+<section id="about">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">01 / OVERVIEW</div>
+      <h2>它是什么</h2>
+      <p>如果把科学教育拆开看，缺的往往不是知识，而是「可以动手」这一层。这个作品想补的就是这一层：每一个结论旁边，都放着一个能被你改坏的旋钮。</p>
+    </div>
+
+    <div class="three">
+      <div class="tcard reveal">
+        <i>01</i>
+        <h3>把公式变成可以拧的旋钮</h3>
+        <p>每个场景都配一块参数面板。改一个数，画面立刻给出反应：波长变长，条纹间距就变宽；引力井的深度一变，行星要么掉进去，要么飞出去。因果关系不是听来的，是试出来的。</p>
+      </div>
+      <div class="tcard reveal">
+        <i>02</i>
+        <h3>把跨度极大的尺度放进同一个镜头</h3>
+        <p>从太阳系的轨道，到原子核里的一次裂变；从一片叶子，到类囊体膜上的一个分子。镜头可以连续推进，尺度切换不需要换一个软件、换一套说法。</p>
+      </div>
+      <div class="tcard reveal">
+        <i>03</i>
+        <h3>把一条路走成可以复述的样子</h3>
+        <p>四章、十四个场景、八十九幕讲解。每一幕都有旁白，和一句「你可以试试」。看完不是记住了一堆动图，而是能把这条线重新讲给别人听。</p>
+      </div>
+    </div>
+
+    <div class="notis reveal">
+      <p><b>它不是什么：</b>不是课件，不需要按课时切分；不是科普视频，不给你一条固定的时间轴；也不是一套需要安装的软件——打开是一个能动手的模型，合上是一条能讲出来的路。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 四章 ================= -->
+<section id="chapters">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">02 / STRUCTURE</div>
+      <h2>四章：从星空走到自己</h2>
+      <p>章节顺序不是按学科分的，是按「人类理解的顺序」排的——先看见天，再拆开物质，然后抽掉具体的东西只剩规律，最后把镜头转向看的人自己。</p>
+    </div>
+
+    <div class="chapters">
+      <div class="chap reveal">
+        <div class="rom">Ⅰ</div>
+        <h3>宇宙的法则</h3>
+        <div class="sub">引力 · 物质与能量 · 电磁之光</div>
+        <ul>
+          <li><b>太阳系</b>八大行星按各自周期运行，土星环与太阳光照，可贴近观察行星表面。</li>
+          <li><b>万有引力</b>六个子场景：引力井、双星互绕、开普勒三定律、三体混沌、潮汐力、逃逸速度。</li>
+          <li><b>质能方程</b>质量—能量天平、湮灭 / 裂变 / 聚变三种微观过程、太阳与煤球的对照。</li>
+          <li><b>麦克斯韦方程组</b>四区全景：高斯电通量、磁通量、法拉第感应、位移电流。</li>
+          <li><b>电磁波</b>E ⊥ B 正交振荡的平面波，波长、频率、振幅都能调。</li>
+        </ul>
+        <div class="quote">「先学会看天。引力和光是最早被写下来的两条规律，也是最容易被看见的两条。」</div>
+      </div>
+
+      <div class="chap reveal">
+        <div class="rom">Ⅱ</div>
+        <h3>物质的语言</h3>
+        <div class="sub">元素 · 分子 · 生命之光</div>
+        <ul>
+          <li><b>元素周期表</b>118 种元素三维排布，点击升起玻璃样品舱观察气 / 液 / 固三态。</li>
+          <li><b>DNA 与蛋白质</b>双螺旋结构与蛋白质二级结构并置，看序列如何折叠成形状。</li>
+          <li><b>光合作用</b>叶片 → 叶绿体 → 分子三级缩放，光反应与卡尔文循环在同一段旅程里。</li>
+        </ul>
+        <div class="quote">「世界开始用元素说话。一百一十八个字母，拼出岩石、水和我们自己。」</div>
+      </div>
+
+      <div class="chap reveal">
+        <div class="rom">Ⅲ</div>
+        <h3>规律的抽象</h3>
+        <div class="sub">几何 · 谐波 · 干涉</div>
+        <ul>
+          <li><b>数学模型</b>参数曲面家族与洛伦兹混沌吸引子，同一组方程换一组参数就是另一种形状。</li>
+          <li><b>傅里叶级数</b>方波由谐波现场叠加合成，能看见「直角」是怎么被正弦堆出来的。</li>
+          <li><b>双缝干涉</b>波动光学为主，光子模式下看概率如何一颗一颗堆出条纹。</li>
+        </ul>
+        <div class="quote">「把具体的东西拿掉，只剩下形状与频率。数学不是工具，是这些场景共同的语言。」</div>
+      </div>
+
+      <div class="chap reveal">
+        <div class="rom">Ⅳ</div>
+        <h3>思维的光芒</h3>
+        <div class="sub">认识大脑 · 理解智能体</div>
+        <ul>
+          <li><b>神经网络</b>前向传播逐层点亮，连线粗细即权重强度。</li>
+          <li><b>AI-Agent 思维模型</b>十二个智能体的实时调度大屏：任务流、检索评审、成本与派发队列。</li>
+          <li><b>神经网络推理</b>28 项训练参数 → 多层全连接 → 8 类训练诊断，一场完整的前向推理。</li>
+        </ul>
+        <div class="quote">「最后把镜头转回来：神经元如何点亮，智能体如何协作，模型如何做出判断。」</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 03 重点场景 ================= -->
+<section id="scenes">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">03 / HIGHLIGHTS</div>
+      <h2>六个值得慢看的场景</h2>
+      <p>十四个场景各有各的难点。这六个是技术上最费力、也最适合拿来解释「可交互」到底意味着什么的。</p>
+    </div>
+
+    <div class="hl-grid">
+      <div class="hlcard reveal">
+        <div class="hd"><div class="ico">🪐</div><h3>万有引力<small>SIX SUB-SCENES</small></h3></div>
+        <p>一个场景里放了六种引力。引力井把时空压出一个凹陷，网格线随质量下沉；双星互绕演示质心不动而两颗星都在动；开普勒三定律用同一组数据同时验证面积律与周期律；三体混沌从拉格朗日点走到轨道漂移，最后是黑洞的面条化；潮汐力把同一物体两端的差异拉开；逃逸速度用一条抛物线回答「要跑多快才回不来」。</p>
+        <div class="foot"><span class="chip">6 个子场景</span><span class="chip">参数联动</span><span class="chip">各自独立讲解</span></div>
+      </div>
+
+      <div class="hlcard reveal">
+        <div class="hd"><div class="ico">⚛</div><h3>元素周期表<small>118 ELEMENTS</small></h3></div>
+        <p>118 种元素三维排布，点击任一元素升起玻璃样品舱，看它在常温下是气、是液还是固。卡片绕 Y 轴翻转，背面是原子量、电子排布（按 Madelung 规则并做例外修正）、熔沸点、晶格与典型用途。玻璃舱用的是真实的折射材质，代价是每帧多渲染一遍场景——因此内置了帧率守卫：连续 0.55 秒低于 24 fps 就自动降级为轻量玻璃并给出提示。</p>
+        <div class="foot"><span class="chip">118 元素全覆盖</span><span class="chip">卡片翻面</span><span class="chip">性能自适应</span></div>
+      </div>
+
+      <div class="hlcard reveal">
+        <div class="hd"><div class="ico">🌿</div><h3>光合作用<small>THREE-SCALE ZOOM</small></h3></div>
+        <p>最难的不是画叶子，是尺度。镜头从一片叶子出发，推进到叶绿体，再落到类囊体膜上的分子，光反应与卡尔文循环在连续的推进中依次展开。三个数量级的跨度里没有一次「切换画面」，而是一次连续的飞行——学生看到的是一条路，不是三张图。</p>
+        <div class="foot"><span class="chip">叶片 → 叶绿体 → 分子</span><span class="chip">连续推进</span><span class="chip">6 幕讲解</span></div>
+      </div>
+
+      <div class="hlcard reveal">
+        <div class="hd"><div class="ico">⚡</div><h3>麦克斯韦方程组<small>FOUR LAWS, FOUR ZONES</small></h3></div>
+        <p>四个方程对应四个可以独立观看的演示区：高斯电通量、高斯磁通量、法拉第电磁感应、麦克斯韦位移电流。四个区并置在一个全景里，可以对照着看——为什么电场线能从闭合面穿出，磁感线却总是成环，为什么变化的磁场会生出一个旋涡状的电场。</p>
+        <div class="foot"><span class="chip">四区全景</span><span class="chip">场线可视化</span><span class="chip">6 幕讲解</span></div>
+      </div>
+
+      <div class="hlcard reveal">
+        <div class="hd"><div class="ico">∑</div><h3>质能方程<small>E = mc²</small></h3></div>
+        <p>用一架天平把两种完全不同的东西放在两端：一端是一克质量，另一端是 9×10¹³ 焦耳。湮灭、裂变、聚变三种微观过程依次播完，能量的量级差异一目了然。旁边还放了一个对照——太阳每秒把大约四百万吨质量变成光，而一块煤烧完，质量的变化小到无法称量。</p>
+        <div class="foot"><span class="chip">质量—能量天平</span><span class="chip">三种核过程</span><span class="chip">太阳 vs 煤球</span></div>
+      </div>
+
+      <div class="hlcard reveal">
+        <div class="hd"><div class="ico">≋</div><h3>双缝干涉<small>TWO EXPLANATIONS</small></h3></div>
+        <p>同一个实验，两种讲法。波动模式下，条纹从两列波的叠加里自然长出来；切到光子模式，光子一颗一颗落下，屏幕上先是一片散点，落得越多，条纹越清晰——概率自己把图案堆了出来。这是整部作品里最能让人停下来看一会儿的一个场景。</p>
+        <div class="foot"><span class="chip">波动 / 光子双模式</span><span class="chip">概率累积</span><span class="chip">5 幕讲解</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 04 两块大屏 ================= -->
+<section id="screens">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">04 / TWO SCREENS</div>
+      <h2>两块向内看的大屏</h2>
+      <p>第四章的两个场景不是三维模拟，而是两块「战术大屏」——把 AI 系统的内部运作摊开：一块看智能体如何协作，一块看模型如何做出一次判断。</p>
+    </div>
+
+    <div class="screen reveal">
+      <div class="txt">
+        <div class="tag"><s></s>SCREEN 01 · OPS SCHEDULER</div>
+        <h3>AI-Agent 思维模型</h3>
+        <div class="sub">AGENT ORCHESTRATION</div>
+        <p class="p">十二个智能体在环形调度台上同时工作。上游任务流入，经过检索、评审，再派发到执行队列——整条链路在同一条时间线上跑，谁在忙、谁在等、哪一步卡住了，一眼能看出来。中间是汇聚的光线与谱线，右侧是成本、时延与队列深度的实时读数。</p>
+        <ul>
+          <li><b>光线调速控件</b>0 到 4 档滑块，附五个预设：1× / 1.5× / 2.2× / 3× / 4.2×，档位记在本地，下次打开还是上次的速度。</li>
+          <li><b>单一主题</b>整页只保留 OPS 一个视图，标题为「AI-Agent 神经网络思维调用展示」，不再有换主题的入口。</li>
+          <li><b>嵌入方式</b>作为内嵌页打包进主程序，<code style="font-family:var(--mono);font-size:12px;color:var(--gold)">iframe.srcdoc</code> 注入，按 Esc 同样回到场景目录。</li>
+        </ul>
+        <div class="foot" style="display:flex;flex-wrap:wrap;gap:7px">
+          <span class="chip">12 个智能体</span><span class="chip">任务流</span><span class="chip">成本读数</span><span class="chip">五档调速</span>
+        </div>
+      </div>
+      <div class="viz">
+        <svg viewBox="0 0 300 290" aria-label="调度台示意">
+          <g class="spin" opacity=".55">
+            <circle cx="150" cy="145" r="96" fill="none" stroke="rgba(120,180,255,.14)" stroke-width="1"/>
+            <circle cx="150" cy="145" r="118" fill="none" stroke="rgba(120,180,255,.08)" stroke-width="1" stroke-dasharray="2 6"/>
+          </g>
+          <g id="opsNodes"></g>
+          <circle cx="150" cy="145" r="7" fill="#4de2ff" class="pulse"/>
+          <circle cx="150" cy="145" r="16" fill="none" stroke="rgba(77,226,255,.4)" stroke-width="1"/>
+          <text x="150" y="272" text-anchor="middle" font-size="9" fill="#546d8c"
+            style="font-family:ui-monospace,monospace;letter-spacing:2px">ORCHESTRATOR</text>
+        </svg>
+        <div class="cap">12 AGENTS · RING DISPATCH</div>
+      </div>
+    </div>
+
+    <div class="screen reveal">
+      <div class="txt">
+        <div class="tag"><s></s>SCREEN 02 · NEURAL INFERENCE</div>
+        <h3>神经网络推理</h3>
+        <div class="sub">FORWARD PASS, END TO END</div>
+        <p class="p">把一次大模型训练诊断完整摊开在一屏上。左边是二十八项真实训练参数，中间是多层全连接网络，右边是 softmax 输出的八类训练诊断。信号从左流到右，每一层点亮一次，最后一行一行打在右侧的日志面板上。</p>
+        <ul>
+          <li><b>输入层</b>学习率、训练损失、困惑度、梯度范数、批大小、序列长度、warmup、权重衰减、dropout、β1/β2、eps、梯度累积、梯度裁剪、GPU 利用率、MFU、tokens/s、KV Cache、注意力熵、路由负载、辅助损失、KL 散度、输出熵、压缩比、奖励模型分、验证损失、训练步数、累计 FLOPs。</li>
+          <li><b>宽度四档</b>S / M / L / XL —— 12·16·12 → 18·22·16 → 24·28·20 → 28·28·24，各层按比例扩展，单层上限 28 个节点。</li>
+          <li><b>输出层</b>收敛正常 / 学习率过高 / 学习率过低 / 梯度尖峰 / 显存风险 / 平台期 / 欠拟合 / 过拟合，八类诊断带着概率条一起给出。</li>
+        </ul>
+        <div class="foot" style="display:flex;flex-wrap:wrap;gap:7px">
+          <span class="chip">28 项参数</span><span class="chip">4 档宽度</span><span class="chip">8 类诊断</span><span class="chip">逐步点亮</span>
+        </div>
+      </div>
+      <div class="viz">
+        <svg viewBox="0 0 320 290" aria-label="前向传播示意">
+          <g id="nnLinks"></g>
+          <g id="nnNodes"></g>
+          <text x="160" y="268" text-anchor="middle" font-size="9" fill="#546d8c"
+            style="font-family:ui-monospace,monospace;letter-spacing:2px">28 → DENSE → 8</text>
+        </svg>
+        <div class="cap">FORWARD PASS</div>
+      </div>
+    </div>
+
+    <div class="notis reveal">
+      <p><b>为什么值得单独说：</b>这两块大屏原来都是独立的网页作品，被整页打包、以 iframe 内嵌的方式装进了「人类之光」。它们和十四个三维场景享同一套导航——侧栏、目录卡片、快捷键、Esc 返回，用起来没有任何「外挂」的感觉。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 05 交互 ================= -->
+<section id="ux">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">05 / INTERACTION</div>
+      <h2>看得见的交互，看不见的照顾</h2>
+      <p>交互设计的难点从来不是「加个滑块」，而是让一个不懂三维软件的人，第一次打开就知道该把手放哪儿。</p>
+    </div>
+
+    <div class="mini">
+      <div class="mc reveal">
+        <span class="k">GUIDED</span>
+        <b>分步讲解 · 89 幕</b>
+        <p>点开「讲解模式」，模拟暂停，画面按步骤推进：文字旁白 + 一句参数实验建议。部分步骤会自动飞行相机、用脉冲光环高亮要素、联动切换预设。十二个三维场景各有一套，万有引力的六个子场景各有一份。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">SAFE AREA</span>
+        <b>画布安全区</b>
+        <p>左侧公式卡、右侧参数面板、顶部标题栏都会挡住画面。框架每帧检测这些区域，自动平移渲染视锥，让三维主体始终落在真正的可用区中心——场景不需要手工调相机去躲 HUD。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">GALLERY</span>
+        <b>场景目录页</b>
+        <p>打开先看到十四张真实渲染的缩略图，一句话简介平铺，点卡片进入。侧栏「场景目录」或 Esc 随时回来。带 <code style="font-family:var(--mono);font-size:12px;color:var(--gold)">#场景id</code> 的链接则跳过目录直达。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">PANEL</span>
+        <b>每个场景一块面板</b>
+        <p>控件按场景定制：滑块、开关、下拉、按钮。改动即时生效，离开再回来还是上次的值。面板里的「回灌」也走同一套接口，不会被误判成用户操作。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">ONBOARDING</span>
+        <b>首次引导浮层</b>
+        <p>每个场景第一次进入时，底部浮出操作指引：左键平移、右键旋转、滚轮缩放、快捷键。四秒淡出，点一下也能关。加 <code style="font-family:var(--mono);font-size:12px;color:var(--gold)">?guide=1</code> 可以强制重看。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">KEYBOARD</span>
+        <b>一条键盘走完全程</b>
+        <p>数字与符号键直接切场景，Esc 回目录，方向键翻讲解。触屏上同一套手势换成了单指拖拽与双指缩放，手机浏览器打开即用。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 06 工程 ================= -->
+<section id="eng">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">06 / ENGINEERING</div>
+      <h2>为什么它只有一个文件</h2>
+      <p>分享这件事，比技术选型更早决定了架构：收件人不会装环境，不会解压，也不该被要求「先起个本地服务器」。</p>
+    </div>
+
+    <div class="mini">
+      <div class="mc reveal">
+        <span class="k">SINGLE FILE</span>
+        <b>三十三个源文件，一个 HTML</b>
+        <p>Three.js、KaTeX、woff2 字体、十四个场景脚本、两块内嵌大屏，全部内联进一个 2.3 MB 的 .html。双击就开，微信、钉钉、邮件直接发。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">OFFLINE</span>
+        <b>离线优先</b>
+        <p>Three.js 用 UMD 版本地化（r163 起官方已移除 UMD 构建，所以锁在 r149），KaTeX 的字体以 base64 嵌进 CSS。全程不请求任何 CDN，断网也一样跑。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">SRCDOC</span>
+        <b>内嵌页为什么不用 src</b>
+        <p>Chrome / Edge 禁止 <code style="font-family:var(--mono);font-size:12px;color:var(--gold)">file://</code> 页面用 iframe 加载其他本地文件，直连必然白屏（实测 contentDocument 为 null）。所以整页 base64 内联，运行时解码写进 <code style="font-family:var(--mono);font-size:12px;color:var(--gold)">srcdoc</code>。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">CONTRACT</span>
+        <b>三步接入一个场景</b>
+        <p>新建一个 js 文件，按约定声明 id、名称、图标、相机、控件与生命周期，再在入口加一行 script。侧栏、目录卡片、参数面板、快捷键、资源回收全部自动生效。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">MEMORY</span>
+        <b>切场景就回收显存</b>
+        <p>几何体、材质、纹理在场景卸载时逐个释放。来回切几十次，显存不会一路往上涨——这是长时间演示最容易被忽略、也最容易翻车的地方。</p>
+      </div>
+      <div class="mc reveal">
+        <span class="k">PERF GUARD</span>
+        <b>弱设备自动降级</b>
+        <p>玻璃折射材质在弱机上会把帧率打到个位数。场景内置帧率守卫，连续低于阈值就降级为轻量材质并提示；用户手动打开折射开关后视为明确选择，只在极端掉帧时才兜底。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 07 索引 ================= -->
+<section id="index">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">07 / INDEX</div>
+      <h2>十四个场景，一页看完</h2>
+      <p>按作品内的排列顺序（也是快捷键顺序）。除万有引力外，每个都是独立场景；万有引力的六个子场景在场景内切换。</p>
+    </div>
+
+    <div class="tblwrap reveal">
+      <table>
+        <thead>
+          <tr><th style="width:38px">#</th><th style="width:170px">场景</th><th style="width:74px">章节</th><th>核心内容</th><th style="width:56px" class="key">键</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="n">01</td><td class="name"><em>☉</em>太阳系</td><td class="ch-tag">Ⅰ</td><td>八大行星按真实周期运行，土星环与太阳光照，可贴近观察行星表面。</td><td class="key"><span class="kbd">1</span></td></tr>
+          <tr><td class="n">02</td><td class="name"><em>⚛</em>元素周期表</td><td class="ch-tag">Ⅱ</td><td>118 种元素三维排布，玻璃样品舱看三态，卡片翻面读电子排布与物性。</td><td class="key"><span class="kbd">2</span></td></tr>
+          <tr><td class="n">03</td><td class="name"><em>⑃</em>神经网络</td><td class="ch-tag">Ⅳ</td><td>前向传播逐层点亮，连线粗细即权重强度。</td><td class="key"><span class="kbd">3</span></td></tr>
+          <tr><td class="n">04</td><td class="name"><em>∑</em>数学模型</td><td class="ch-tag">Ⅲ</td><td>参数曲面家族与洛伦兹混沌吸引子，换参数就是另一种形状。</td><td class="key"><span class="kbd">4</span></td></tr>
+          <tr><td class="n">05</td><td class="name"><em>≋</em>双缝干涉</td><td class="ch-tag">Ⅲ</td><td>波动光学与光子累积，看概率如何一颗一颗堆出条纹。</td><td class="key"><span class="kbd">5</span></td></tr>
+          <tr><td class="n">06</td><td class="name"><em>🧬</em>DNA 与蛋白质</td><td class="ch-tag">Ⅱ</td><td>双螺旋与蛋白质二级结构并置。</td><td class="key"><span class="kbd">6</span></td></tr>
+          <tr><td class="n">07</td><td class="name"><em>∫</em>傅里叶级数</td><td class="ch-tag">Ⅲ</td><td>方波由谐波现场叠加合成，直角是正弦堆出来的。</td><td class="key"><span class="kbd">7</span></td></tr>
+          <tr><td class="n">08</td><td class="name"><em>λ</em>电磁波</td><td class="ch-tag">Ⅰ</td><td>E ⊥ B 正交振荡的平面电磁波，波长频率可调。</td><td class="key"><span class="kbd">8</span></td></tr>
+          <tr><td class="n">09</td><td class="name"><em>🌿</em>光合作用</td><td class="ch-tag">Ⅱ</td><td>叶片 → 叶绿体 → 分子三级缩放，光反应与卡尔文循环。</td><td class="key"><span class="kbd">9</span></td></tr>
+          <tr><td class="n">10</td><td class="name"><em>⚡</em>麦克斯韦方程组</td><td class="ch-tag">Ⅰ</td><td>四区全景：高斯电通量、磁通量、法拉第感应、位移电流。</td><td class="key"><span class="kbd">0</span></td></tr>
+          <tr><td class="n">11</td><td class="name"><em>⚛</em>质能方程</td><td class="ch-tag">Ⅰ</td><td>质量—能量天平、湮灭 / 裂变 / 聚变、太阳 vs 煤球。</td><td class="key"><span class="kbd">-</span></td></tr>
+          <tr><td class="n">12</td><td class="name"><em>🪐</em>万有引力</td><td class="ch-tag">Ⅰ</td><td>引力井 / 双星 / 开普勒 / 三体 / 潮汐 / 逃逸速度，六个子场景。</td><td class="key"><span class="kbd">=</span></td></tr>
+          <tr><td class="n">13</td><td class="name"><em>⬡</em>AI-Agent 思维模型</td><td class="ch-tag">Ⅳ</td><td>十二个智能体的调度大屏：任务流、检索评审、成本与派发队列。</td><td class="key"><span class="kbd">Q</span></td></tr>
+          <tr><td class="n">14</td><td class="name"><em>◈</em>神经网络推理</td><td class="ch-tag">Ⅳ</td><td>28 项训练参数 → 多层全连接 → 8 类训练诊断，完整前向传播。</td><td class="key"><span class="kbd">W</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 08 打开 ================= -->
+<section id="use">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-num">08 / GETTING IN</div>
+      <h2>怎么打开</h2>
+      <p>没有安装步骤。下面的四行，就是这个作品全部的使用说明。</p>
+    </div>
+
+    <div class="use">
+      <div class="panel reveal">
+        <h3>打开与分享</h3>
+        <ol>
+          <li>拿到 <code>人类之光.html</code> 这一个文件。</li>
+          <li>双击，用任意现代浏览器打开——Edge、Chrome、Safari 都行。</li>
+          <li>要转给别人，直接把这一个文件发过去，不要压缩、不要拆包。</li>
+          <li>手机上用浏览器打开同样可用，手势换成单指拖拽与双指缩放。</li>
+        </ol>
+      </div>
+      <div class="panel reveal">
+        <h3>几个直接跳转的写法</h3>
+        <ul>
+          <li><code>...html#solar</code> —— 跳过目录，直接进太阳系。</li>
+          <li><code>...html#neuralnet</code> —— 直接打开神经网络推理大屏。</li>
+          <li><code>...html?g=threebody#gravity</code> —— 直接进万有引力的三体混沌。</li>
+          <li><code>...html?guide=1#maxwell</code> —— 强制重看麦克斯韦的首次引导。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="dot"></div>
+    <p class="q">宇宙用数学写就，而人类学会了阅读<br>—— 既仰望星空，也凝视自身</p>
+    <div class="sig">HUMAN LIGHT · 罗司徒 · 十四个场景 / 四章 / 一个文件</div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* 顶部进度条 */
+  var prog = document.getElementById('prog');
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    prog.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  }
+  document.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* 滚入淡出 */
+  var items = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.01, rootMargin: '0px 0px -50px 0px' });
+    Array.prototype.forEach.call(items, function (el, i) {
+      el.style.transitionDelay = Math.min(i % 3, 2) * 0.07 + 's';
+      io.observe(el);
+    });
+  } else {
+    Array.prototype.forEach.call(items, function (el) { el.classList.add('in'); });
+  }
+
+  /* 兜底：某些环境（无头、旧内核、打印）里观察器可能不回调，2.2 秒后把已在视口内的补上 */
+  setTimeout(function () {
+    Array.prototype.forEach.call(items, function (el) {
+      if (el.classList.contains('in')) return;
+      var r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight && r.bottom > 0) el.classList.add('in');
+    });
+  }, 2200);
+
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function el(name, attrs) {
+    var n = document.createElementNS(SVGNS, name);
+    for (var k in attrs) if (attrs.hasOwnProperty(k)) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  /* ---- OPS 调度台：中心 + 环上 12 个智能体 ---- */
+  var opsG = document.getElementById('opsNodes');
+  if (opsG) {
+    var cx = 150, cy = 145, r = 96;
+    for (var i = 0; i < 12; i++) {
+      var a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      var x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      opsG.appendChild(el('line', {
+        x1: cx, y1: cy, x2: x, y2: y,
+        stroke: 'rgba(77,226,255,.20)', 'stroke-width': '1',
+        class: i % 3 === 0 ? 'flow' : ''
+      }));
+      var busy = i % 4 === 0;
+      opsG.appendChild(el('circle', {
+        cx: x, cy: y, r: busy ? 5 : 3.4,
+        fill: busy ? '#ffcf6b' : '#4de2ff',
+        opacity: busy ? '0.95' : '0.6'
+      }));
+      if (busy) {
+        opsG.appendChild(el('circle', {
+          cx: x, cy: y, r: '10', fill: 'none',
+          stroke: 'rgba(255,207,107,.45)', 'stroke-width': '1'
+        }));
+      }
+    }
+  }
+
+  /* ---- 神经网络：4 层前向传播 ---- */
+  var nnL = document.getElementById('nnLinks');
+  var nnN = document.getElementById('nnNodes');
+  if (nnL && nnN) {
+    var layers = [3, 6, 5, 3];
+    var xs = [46, 122, 200, 278];
+    var pts = [];
+    layers.forEach(function (n, li) {
+      var arr = [], span = 150, top = 78;
+      for (var j = 0; j < n; j++) {
+        var y = n === 1 ? top + span / 2 : top + (span / (n - 1)) * j;
+        arr.push({ x: xs[li], y: y });
+      }
+      pts.push(arr);
+    });
+    for (var L = 0; L < pts.length - 1; L++) {
+      var hot = L === 1;                       // 中段连线做流动高亮
+      pts[L].forEach(function (p) {
+        pts[L + 1].forEach(function (q, k) {
+          nnL.appendChild(el('line', {
+            x1: p.x, y1: p.y, x2: q.x, y2: q.y,
+            stroke: (hot && k === 2) ? 'rgba(77,226,255,.5)' : 'rgba(120,180,255,.16)',
+            'stroke-width': (hot && k === 2) ? '1.3' : '0.8',
+            class: (hot && k === 2) ? 'flow' : ''
+          }));
+        });
+      });
+    }
+    pts.forEach(function (arr, li) {
+      arr.forEach(function (p) {
+        var act = li === 0 || li === arr.length - 1;
+        nnN.appendChild(el('circle', {
+          cx: p.x, cy: p.y, r: act ? 4.2 : 3.4,
+          fill: li === 3 ? '#ffcf6b' : '#4de2ff',
+          opacity: li === 3 ? '0.9' : (0.45 + li * 0.16).toFixed(2)
+        }));
+      });
+      nnN.appendChild(el('text', {
+        x: xs[li], y: 60, 'text-anchor': 'middle', 'font-size': '9',
+        fill: '#546d8c', style: 'font-family:ui-monospace,monospace;letter-spacing:1px'
+      })).textContent = ['IN', 'H1', 'H2', 'OUT'][li];
+    });
+  }
+
+  /* 快捷键提示：目录内按数字跳转（仅本页，不影响作品） */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+})();
+</script>
+</body>
+</html>

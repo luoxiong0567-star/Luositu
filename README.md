@@ -8,20 +8,22 @@
 
 | 文件 | 体积 | 适用场景 |
 |---|---|---|
-| `release\人类之光.html` | ~2.0 MB | **唯一推荐交付物**。单文件自包含，微信/钉钉/邮件直接发，双击浏览器即开 |
-| `release\人类之光-网页版.zip` | ~0.8 MB | 备选。web/ 文件夹形态，需解压后双击 `index.html` |
+| `release\人类之光.html` | ~2.3 MB | **唯一推荐交付物**。单文件自包含，微信/钉钉/邮件直接发，双击浏览器即开 |
+| `release\人类之光-网页版.zip` | ~0.9 MB | 备选。web/ 文件夹形态，需解压后双击 `index.html` |
 
-两个文件功能完全一致（13 个场景：12 个 3D 场景 + 1 个内嵌页面）。分享给他人看，用第一个文件即可；详细说明见 `release\分享说明.md`。
+两个文件功能完全一致（14 个场景：12 个 3D 场景 + 2 个内嵌页面）。分享给他人看，用第一个文件即可；详细说明见 `release\分享说明.md`，作品介绍见 `release\人类之光-作品介绍.html`。
 
 ## 单文件自包含 HTML
 
-把 `web/` 目录 31 个文件（CSS、Three.js、KaTeX、13 个场景脚本）全部内联为一个 `.html`，因此不需要压缩包、不需要保持目录结构、不需要本地服务器。KaTeX 的 woff2 字体已 base64 内嵌进 CSS，公式渲染全程离线。
+把 `web/` 目录 33 个文件（CSS、Three.js、KaTeX、14 个场景脚本、2 个内嵌页面数据）全部内联为一个 `.html`，因此不需要压缩包、不需要保持目录结构、不需要本地服务器。KaTeX 的 woff2 字体已 base64 内嵌进 CSS，公式渲染全程离线。
 
-**已验证**：在只含这一个文件的隔离目录中，以 `file://` 协议无任何特殊参数打开，13 个场景全部正常注册并渲染（含最重的光合作用场景）。手机浏览器（iPhone Safari 等）同样直接打开。
+**已验证**：在只含这一个文件的隔离目录中，以 `file://` 协议无任何特殊参数打开，14 个场景全部正常注册并渲染（含最重的光合作用场景）。手机浏览器（iPhone Safari 等）同样直接打开。
 
-**启动体验**：无直达链接打开时先展示**场景目录页**——13 张 CDP 真实渲染的场景缩略图 + 一句话简介平铺展示，点击卡片进入场景；侧栏「☰ 场景目录」按钮或 `Esc` 随时返回。左侧场景列表按「Ⅰ 宇宙的法则 → Ⅱ 物质的语言 → Ⅲ 规律的抽象 → Ⅳ 思维的光芒」四章分组。带 `#场景id` 直达链接则跳过目录直接进入。
+**启动体验**：无直达链接打开时先展示**场景目录页**——14 张 CDP 真实渲染的场景缩略图 + 一句话简介平铺展示，点击卡片进入场景；侧栏「☰ 场景目录」按钮或 `Esc` 随时返回。左侧场景列表按「Ⅰ 宇宙的法则 → Ⅱ 物质的语言 → Ⅲ 规律的抽象 → Ⅳ 思维的光芒」四章分组。带 `#场景id` 直达链接则跳过目录直接进入。
 
 **AI-Agent思维模型（内嵌页面场景，第 13 个）**：侧栏「Ⅳ · 思维的光芒」下的第二个条目，内容为独立的「Agent 战术大屏 · OPS 调度中心」页面（源：`D:/agent-display-main/index.html#ops`）。集成方式是 **iframe + `srcdoc` 内联**，而不是 `src` 直连——Chrome / Edge 默认禁止 `file://` 页面 iframe 加载其他本地文件，直连必然白屏（实测默认启动参数下 `contentDocument` 为 `null`）。`_build_agentpage.js` 把源页面转成 base64 存入 `web/js/data/agentpage.js`，运行时解码写入 `srcdoc`，因此单文件版、离线环境和任意机器上都能正常显示，也不会与主页面样式/全局变量冲突。源页面已做三处最小改造：去掉 Google Fonts 外链（保持全程离线）、启动视图锁定为 `ops`、注入 Esc 转发（iframe 内按 Esc 同样回到场景目录）。直达链接 `?#aiagent`，快捷键 `q`。
+
+**神经网络推理（内嵌页面场景，第 14 个）**：内容为「神经网络推理 · NEURAL INFERENCE」大屏（源：`D:/agent-display-main/neural-lab.html`），左侧 28 项真实训练参数（学习率、损失、梯度范数、GPU 利用率、MFU、KV Cache、KL 散度…），中间多层全连接，右侧 softmax 输出 8 类训练诊断。集成方式与上一个场景相同（`_build_neuralpage.js` → `web/js/data/neuralpage.js` → `srcdoc`）。顶栏「宽度」控件在 S / M / L / XL 之间切换层宽（12·16·12 → 18·22·16 → 24·28·20 → 28·28·24，单层上限 28）；连线按「冷 / 热」合并成两个 `Path2D`，784 条线每帧只 stroke 两次。直达链接 `?#neuralnet`，快捷键 `w`。
 
 **周期表卡片翻面**：点击任一元素卡片，卡片绕 Y 轴 180° 缓动翻转到背面——原子量、电子排布（Madelung 规则 + 例外修正，118 号全覆盖）、熔沸点、常温物态、晶格与典型用途完整呈现；再点翻回，同一时间只保留一张翻开；背面贴图首次翻转时才绘制，讲解模式冻结时翻转动画依然流畅。
 
@@ -62,13 +64,17 @@ web/
   vendor/katex.min.js      KaTeX 0.16.11（公式排版，已本地化）
   css/katex.css            KaTeX 样式（woff2 字体 base64 内嵌，离线可用）
   js/core/                 轨道控制器（左键平移/右键旋转/滚轮缩放/触屏手势）、场景管理器（GPU 资源回收）
-  js/scenes/               13 个场景插件（aiAgent 为内嵌页面，其余为 3D；gravity/ 含主框架 + 6 个子场景）
-  js/data/                 元素数据、场景缩略图（thumbs.js）、内嵌页面数据（agentpage.js，自动生成）
+  js/scenes/               14 个场景插件（aiAgent、neuralLab 为内嵌页面，其余为 3D；gravity/ 含主框架 + 6 个子场景）
+  js/data/                 元素数据、场景缩略图（thumbs.js）、内嵌页面数据（agentpage.js / neuralpage.js，自动生成）
   js/main.js               侧栏（四章分组）、场景目录页、参数面板、URL 参数解析
 build_single_html.py       唯一发布脚本（单文件 HTML + 网页版 zip）
 _thumbs.js                 缩略图再生成工具（CDP 逐场景截图 → web/js/data/thumbs.js）
 _build_agentpage.js        外部页面打包工具（agent-display → base64 → web/js/data/agentpage.js）
+_build_neuralpage.js       外部页面打包工具（neural-lab → base64 → web/js/data/neuralpage.js）
 _agent_test.js             AI-Agent 内嵌场景回归（渲染 / 目录 / Esc / 切场景清理 / 侧栏进入，5 项）
+_nn_test.js                神经网络推理场景回归（直达 / Esc / 清理 / 侧栏 / 快捷键，5 项）
+_nn_page_test.js           神经网络推理源页冒烟（宽度切换、28 行参数、784 条连线）
+_intro_test.js             作品介绍页回归（结构断言 + 桌面 / 手机分段截图）
 _t1_test.js                全量回归（12 个 3D 场景讲解模式 + 四章侧栏 + 目录页）
 _flip_test.js              周期表回归（电子排布全覆盖 + 翻面交互 + 性能守卫，9 项）
 _perf_diag.js              分阶段 FPS 诊断（初始 / 点击后 / 关玻璃舱 / 对照场景）
