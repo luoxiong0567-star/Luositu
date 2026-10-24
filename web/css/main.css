@@ -440,3 +440,80 @@ input[type=range]::-webkit-slider-thumb {
 .embed-loading b { font-size: 13px; font-weight: 600; letter-spacing: 1.5px; }
 .embed-loading span { font-size: 10.5px; letter-spacing: 2px; color: #5f7190; }
 @keyframes embedSpin { to { transform: rotate(360deg); } }
+
+/* ---------------- 观展回声（云端留言） ---------------- */
+.hl-wall {
+  margin: 26px 40px 4px; padding: 22px 24px 20px; border-radius: 14px;
+  border: 1px solid rgba(77, 226, 255, .16);
+  background: linear-gradient(180deg, rgba(13, 20, 38, .82), rgba(7, 11, 20, .92));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(120, 180, 255, .06);
+}
+.hl-wall-head h3 {
+  display: flex; align-items: baseline; gap: 10px;
+  font-size: 16px; font-weight: 600; letter-spacing: 2px; color: #e8f1fb;
+}
+.hl-wall-head h3 span { font-size: 9.5px; letter-spacing: 2.6px; color: #5d7391; font-weight: 400; }
+.hl-wall-head p { margin: 7px 0 0; font-size: 12px; line-height: 1.7; color: #7f93af; }
+.hl-wall-form { margin-top: 14px; }
+.hl-wall-nick {
+  width: 190px; padding: 8px 12px; font-size: 12.5px; font-family: inherit;
+  color: #dce7f5; background: rgba(6, 10, 20, .75);
+  border: 1px solid rgba(120, 180, 255, .18); border-radius: 8px; outline: none;
+}
+.hl-wall-text {
+  display: block; width: 100%; margin-top: 10px; padding: 11px 13px;
+  font-size: 13px; line-height: 1.75; font-family: inherit; color: #e5eefb;
+  background: rgba(6, 10, 20, .75); border: 1px solid rgba(120, 180, 255, .18);
+  border-radius: 10px; outline: none; resize: vertical; min-height: 74px;
+}
+.hl-wall-nick:focus, .hl-wall-text:focus {
+  border-color: rgba(77, 226, 255, .62); box-shadow: 0 0 0 2px rgba(77, 226, 255, .12);
+}
+.hl-wall-nick:disabled, .hl-wall-text:disabled { opacity: .5; cursor: not-allowed; }
+.hl-wall-meta { display: flex; align-items: center; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
+.hl-wall-tag { font-size: 11.5px; color: #6f88a8; letter-spacing: .5px; }
+.hl-wall-count { margin-left: auto; font-size: 11.5px; color: #5d7391; font-variant-numeric: tabular-nums; }
+.hl-wall-send {
+  padding: 8px 20px; font-size: 12.5px; font-weight: 600; letter-spacing: 1px;
+  cursor: pointer; color: #04121b; border: 0; border-radius: 9px;
+  background: linear-gradient(135deg, #4de2ff, #7cf0d0);
+  transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
+}
+.hl-wall-send:hover:enabled { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(77, 226, 255, .28); }
+.hl-wall-send:disabled { opacity: .45; cursor: not-allowed; }
+.hl-wall-state { display: none; margin-top: 9px; font-size: 11.5px; line-height: 1.65; color: #7f93af; }
+.hl-wall-state.show { display: block; }
+.hl-wall-state.st-error { color: #ff9a9a; }
+.hl-wall-state.st-offline { color: #8b9cb5; }
+.hl-wall-state.st-loading { color: #6f88a8; }
+.hl-wall-list {
+  margin-top: 18px; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+}
+.hl-note {
+  padding: 12px 14px; border-radius: 10px;
+  border: 1px solid rgba(120, 180, 255, .1); background: rgba(9, 14, 26, .7);
+}
+.hl-note-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11.5px; color: #7288a6; }
+.hl-note-head b { font-size: 12px; font-weight: 600; color: #bcd6ee; }
+.hl-note-tag {
+  font-size: 10.5px; color: #4de2ff; opacity: .82;
+  border: 1px solid rgba(77, 226, 255, .22); border-radius: 5px; padding: 1px 5px;
+}
+.hl-note-head time { margin-left: auto; font-size: 10.5px; color: #5a6f8c; }
+.hl-note p {
+  margin-top: 8px; font-size: 12.5px; line-height: 1.75; color: #c3d4e6;
+  white-space: pre-wrap; word-break: break-word;
+}
+.hl-wall-empty { padding: 16px 0; text-align: center; font-size: 12px; color: #5d7391; }
+/* 离线打开单文件版：没有网络可写，只留一句说明，不摆一个死表单 */
+.hl-wall.st-offline .hl-wall-form,
+.hl-wall.st-offline .hl-wall-list { display: none; }
+.hl-wall.st-offline .hl-wall-state { margin-top: 12px; }
+
+@media (max-width: 760px) {
+  .hl-wall { margin: 22px 18px 4px; padding: 18px 16px; }
+  .hl-wall-nick { width: 100%; }
+  .hl-wall-list { grid-template-columns: 1fr; }
+}
+

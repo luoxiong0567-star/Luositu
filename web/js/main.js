@@ -33,6 +33,8 @@
 
     buildList();
     buildGallery();
+    // 观展回声：目录页底部的云端留言板（离线时自动降级为说明文案）
+    if (HL.Cloud) HL.Cloud.mount();
     document.getElementById('galleryBtn').addEventListener('click', showGallery);
 
     window.addEventListener('keydown', function (e) {
@@ -51,7 +53,7 @@
       else if (k === 'w') idx = 13;         // w → 第 14 个
       if (idx >= 0) {
         var list = HL.allScenes();
-        if (list[idx]) load(list[idx].id);
+        if (list[idx]) load(list[idx].id, true);
       }
     });
 
@@ -88,7 +90,7 @@
       item.innerHTML =
         '<div class="ico">' + def.icon + '</div>' +
         '<div class="txt"><b>' + def.name + '</b><span>' + def.short + '</span></div>';
-      item.addEventListener('click', function () { load(def.id); });
+      item.addEventListener('click', function () { load(def.id, true); });
       wrap.appendChild(item);
     }
 
@@ -109,7 +111,7 @@
     all.forEach(function (def) { if (!used[def.id]) addItem(def); });
   }
 
-  function load(id) {
+  function load(id, byUser) {
     if (!id || id === currentId) {
       if (id === currentId) manager.resetView();
       return;
@@ -120,6 +122,8 @@
     if (currentId && galleryEl && galleryEl.classList.contains('show')) hideGallery();
     if (!manager.load(id)) return;
     currentId = id;
+    // 只记录用户主动打开的场景，供云端留言标注「记录于」
+    if (byUser && HL.Cloud) HL.Cloud.setScene(id);
 
     var def = HL.getScene(id);
     document.getElementById('sceneTitle').textContent = def.name;
@@ -265,7 +269,7 @@
       }
       card.addEventListener('click', function () {
         hideGallery();
-        load(card.dataset.id);
+        load(card.dataset.id, true);
       });
     });
   }

@@ -60,6 +60,37 @@ python build_single_html.py 自定义路径.html     # 仅导出单文件到指�
 
 发布后若根链接仍是旧内容，多半是 CDN 缓存（响应头 `Age` 非 0），等缓存过期即可；单文件入口可带上 `?sharecode=` 直接访问，绕开缓存立即验证。
 
+## 云服务（WorkBuddy Cloud Service）
+
+作品在目录页底部有一块**「观展回声」**留言板，数据存在云数据库里，所有观展者共享同一份。
+
+| 项 | 值 |
+|---|---|
+| applicationId | `wbapp_Y66v5Zxi3Wv5gkfYo1yj1N` |
+| 资源 id | `wbcs_3Dxl31crFFGNbRwPPHWgWu` |
+| endpoint（数据面） | `https://human-light-science.app.workbuddy.host` |
+| 已接模块 | Database（Auth / Storage / LLM 未使用） |
+
+**表 `hl_notes`**：`id`（identity）、`scene_id`（记录于哪个场景）、`nick`、`content`（≤200 字）、`created_at`。
+
+**为什么没有登录**：作品是靠链接分享的展品，加登录墙会挡住观众，所以按「公开内容」建模，而不是「用户私有数据」：
+
+- RLS 已开启；`anon` / `authenticated` 只被授予 `SELECT, INSERT`
+- 读策略 `USING (true)`（所有人可见），写策略 `WITH CHECK` 限定内容长度
+- **没有 UPDATE / DELETE 策略**，客户端改不了也删不掉别人的留言；要清理只能走管理端 SQL
+
+**前端怎么接**（`web/js/cloud.js`）：
+
+1. 纯 HTML 无构建步骤 → 用 CDN 形态 `@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js`，取 `WorkBuddyCloud` 全局
+2. 客户端全局只初始化一次：`createWorkBuddyCloud({ endpoint, oauthRelayBaseUrl, publishableKey })`，三个值都来自开通时返回的 `publicConfig`
+3. 读：`.from('hl_notes').select(...).order('created_at',{ascending:false}).limit(30)`；写：`.insert({ content, nick, scene_id }).select()`
+4. **`insert` 的返回是空数组时说明被 RLS 拦下，必须当成失败**，不能当成功（已按此处理）
+5. 留言文本一律用 `textContent` 渲染，不拼 HTML
+
+**离线与降级**：`file://` 打开单文件版时 SDK 不加载，面板只留一句说明（`st-offline`），14 个场景完全不受影响；云端报错（无网络 / 401 / 42501）会显示对应文案并禁用提交，不会静默失败。
+
+**验证**（`_cloud_test.js` / `_cloud_probe.js`）：离线模式断言「降级 + 场景完好」；线上模式会在真实域名下读列表、提交一条带时间戳的留言并读回。
+
 ## 从源码开发
 
 ```bat
@@ -79,6 +110,7 @@ web/
   js/scenes/               14 个场景插件（aiAgent、neuralLab 为内嵌页面，其余为 3D；gravity/ 含主框架 + 6 个子场景）
   js/data/                 元素数据、场景缩略图（thumbs.js）、内嵌页面数据（agentpage.js / neuralpage.js，自动生成）
   js/main.js               侧栏（四章分组）、场景目录页、参数面板、URL 参数解析
+  js/cloud.js              云服务接入（SDK 载入、观展回声的读写与离线降级）
 build_single_html.py       唯一发布脚本（单文件 HTML + 网页版 zip）
 _thumbs.js                 缩略图再生成工具（CDP 逐场景截图 → web/js/data/thumbs.js）
 _build_agentpage.js        外部页面打包工具（agent-display → base64 → web/js/data/agentpage.js）
@@ -87,6 +119,8 @@ _agent_test.js             AI-Agent 内嵌场景回归（渲染 / 目录 / Esc /
 _nn_test.js                神经网络推理场景回归（直达 / Esc / 清理 / 侧栏 / 快捷键，5 项）
 _nn_page_test.js           神经网络推理源页冒烟（宽度切换、28 行参数、784 条连线）
 _intro_test.js             作品介绍页回归（结构断言 + 桌面 / 手机分段截图）
+_cloud_test.js             观展回声回归（离线降级 / 线上读 / 线上写并读回）
+_cloud_probe.js            云服务连通性预检（正式域名下 SDK → 读 → 写 → 读回）
 _t1_test.js                全量回归（12 个 3D 场景讲解模式 + 四章侧栏 + 目录页）
 _flip_test.js              周期表回归（电子排布全覆盖 + 翻面交互 + 性能守卫，9 项）
 _perf_diag.js              分阶段 FPS 诊断（初始 / 点击后 / 关玻璃舱 / 对照场景）
