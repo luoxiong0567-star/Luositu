@@ -22,7 +22,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const child = execFile(EDGE, [
     '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=swiftshader',
     '--no-first-run', '--disable-features=msEdgeNewTabPage',
-    '--user-data-dir=' + path.join(ROOT, '_edge_mob'),
+    '--user-data-dir=' + path.join(ROOT, '_edge_mob2'),
+    '--autoplay-policy=no-user-gesture-required',
     '--window-size=390,844', '--hide-scrollbars', '--allow-file-access-from-files',
     '--remote-debugging-port=' + PORT, 'about:blank'
   ], () => {});
@@ -68,10 +69,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   await send('Page.enable'); await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
-  await sleep(7500);
+  await sleep(2200);
   await shot('m-home-1.png');
-  await sleep(6500);
+  await ev('HL.home.goto(1)');
+  await sleep(2200);
   await shot('m-home-2.png');
+  await ev('HL.home.goto(4)');
+  await sleep(2200);
+  await shot('m-home-3.png');
 
   await ev('HL.startJourney()');
   await sleep(2500);

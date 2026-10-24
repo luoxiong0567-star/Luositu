@@ -21,20 +21,32 @@ function httpReq(url, method) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+const CANVAS_INK = `(function(){
+  var c = document.querySelector('.hm-sky');
+  if (!c) return -1;
+  var x = c.getContext('2d');
+  var w = c.width, h = c.height;
+  var d = x.getImageData(0, 0, w, h).data;
+  var lit = 0;
+  for (var i = 3; i < d.length; i += 4 * 37) if (d[i] > 8) lit++;
+  return Math.round(lit / (d.length / (4 * 37)) * 1000) / 10;
+})()`;
+
 (async () => {
   const child = execFile(EDGE, [
     '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=swiftshader',
     '--no-first-run', '--disable-features=msEdgeNewTabPage',
-    '--user-data-dir=' + path.join(ROOT, '_edge_home'),
+    '--user-data-dir=' + path.join(ROOT, '_edge_home_b'),
+    '--autoplay-policy=no-user-gesture-required',
     '--window-size=1440,880', '--hide-scrollbars', '--allow-file-access-from-files',
     '--remote-debugging-port=' + PORT, 'about:blank'
   ], () => {});
-  child.stderr.on('data', () => {});
+  child.stderr.on('data', () => { });
 
   let tabs = null;
   for (let i = 0; i < 60; i++) {
     await sleep(250);
-    try { tabs = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/list')); if (tabs && tabs.length) break; } catch (e) {}
+    try { tabs = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/list')); if (tabs && tabs.length) break; } catch (e) { }
   }
   if (!tabs || !tabs.length) { console.log('ERR: CDP not ready'); child.kill(); process.exit(1); }
 
@@ -71,34 +83,50 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       console.log('SAVED docs/' + file + '  ' + (fs.statSync(path.join(ROOT, 'docs', file)).size / 1024).toFixed(0) + ' KB');
     }
   }
+  const state = () => ev(`JSON.stringify({
+    open: !!(HL.home && HL.home.isOpen()),
+    into: document.getElementById('home').classList.contains('into'),
+    fin: document.getElementById('home').classList.contains('fin'),
+    slide: (function(){ var s = document.querySelector('.hm-slide.on'); return s ? s.querySelector('.hm-st').textContent : null; })(),
+    done: document.querySelectorAll('.hm-dots b.done').length,
+    ink: ${CANVAS_INK},
+    pno: HL.Piano ? HL.Piano.debug() : null
+  })`);
 
   await send('Page.enable'); await send('Runtime.enable');
-  await sleep(4200);
+  await sleep(2300);   // headless 里首次 rAF/合成可能晚到，等稳了再拍开篇
 
   if (MODE === 'all' || MODE === 'home') {
-    console.log('HOME ' + JSON.stringify(await ev('JSON.stringify({open: HL.home && HL.home.isOpen(), rows: document.querySelectorAll(".hm-row").length})')));
-    await shot('home-1.png');
-    await sleep(2600);
-    await shot('home-2.png');
-    await sleep(4200);
-    await shot('home-3.png');
+    await shot('home-1-open.png');
+    console.log('OPEN  ' + await state());
 
-    // 进入目录
+    // 逐句定位（时间轴以音乐的 bar 为单位，测试直接跳拍，省去等待）
+    for (let i = 1; i <= 4; i++) {
+      await ev('HL.home.goto(' + i + ')');
+      await sleep(1500);
+      console.log('SEG' + i + ' ' + await state());
+      await shot('home-2-say' + i + '.png');
+    }
+
+    // 走完 → 结语与出口
+    await ev('HL.home.goto(5)');
+    await sleep(1500);
+    console.log('FIN   ' + await state());
+    await shot('home-3-fin.png');
+
     await ev('document.querySelector(".hm-enter").click()');
-    await sleep(1400);
+    await sleep(1500);
     await shot('home-gallery.png');
-    console.log('GALLERY ' + await ev('JSON.stringify({show: document.getElementById("gallery").classList.contains("show"), cards: document.querySelectorAll(".gal-card").length})'));
+    console.log('GAL   ' + await ev('JSON.stringify({show: document.getElementById("gallery").classList.contains("show"), cards: document.querySelectorAll(".gal-card").length, piano: HL.Piano.playing()})'));
   }
 
   if (MODE === 'all' || MODE === 'journey') {
-    // 8 段结构校验
     console.log('SCRIPT ' + await ev(`JSON.stringify(HL.JOURNEY.map(function(s){
       var b = s.beats || (s.scene ? [s] : []);
       return {k: s.kind || 'scene', ms: s.kind==='open'? s.dur : b.reduce(function(a,x){return a+(x.ms||0)},0),
               n: b.length, sc: b.map(function(x){return x.scene}).join('+'), t: s.title};
     }))`));
 
-    // 缩短每镜时长，把 150 秒压到 ~60 秒，顺带验证自动切换
     await ev(`(function(){
       HL.JOURNEY.forEach(function(s){
         if (s.kind === 'open') s.dur = 2600;
@@ -108,9 +136,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     await ev('HL.startJourney()');
     await sleep(3200);
+    console.log('JR    ' + await ev('JSON.stringify({piano: HL.Piano ? HL.Piano.debug() : null})'));
     await shot('jr-01-open.png');
 
-    // 轮询：每换一镜截一张，验证"自动切换下一段"
     let last = '', shots = 0;
     const t0 = Date.now();
     while (Date.now() - t0 < 90000 && shots < 16) {
@@ -120,11 +148,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       const key = s.idx + ':' + s.bi + ':' + s.mode;
       if (key !== last) {
         last = key;
-        await sleep(1100);                       // 等飞行落位
+        await sleep(1100);
         shots++;
         const tag = s.mode === 'end' ? 'end'
           : (s.idx + 1) + '-' + (s.bi + 1) + '-' + (s.scene || 'art');
-        console.log('SEG ' + JSON.stringify(s));
         await shot('jr-' + String(shots).padStart(2, '0') + '-' + tag + '.png');
         if (s.mode === 'end') break;
       }
@@ -133,15 +160,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     console.log('END ' + await ev('JSON.stringify({end: document.querySelector(".jr-endcard").classList.contains("show"), btns: document.querySelectorAll(".jr-end-btns button").length})'));
 
-    // 回到开篇
     await ev('document.querySelector(".jr-toHome").click()');
     await sleep(1500);
-    console.log('TOHOME ' + await ev('JSON.stringify({home: HL.home.isOpen(), journey: HL.journey.active(), mode: document.getElementById("app").className})'));
+    console.log('TOHOME ' + await ev('JSON.stringify({home: HL.home.isOpen(), journey: HL.journey.active(), piano: HL.Piano.debug()})'));
     await shot('jr-tohome.png');
   }
 
   console.log(errors.length ? 'ERRORS: ' + errors.slice(0, 6).join(' | ') : 'NO JS ERRORS');
-  try { ws.close(); } catch (e) {}
-  try { child.kill(); } catch (e) {}
+  try { ws.close(); } catch (e) { }
+  try { child.kill(); } catch (e) { }
   process.exit(0);
 })();

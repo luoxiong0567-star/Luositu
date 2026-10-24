@@ -412,7 +412,10 @@
       if (!running) return;
       raf = requestAnimationFrame(tick);
       if (!last) last = now;
-      var dt = Math.min(0.05, (now - last) / 1000);
+      // rAF 时间戳偶尔倒退（headless 见过）：负 dt 会让场景物理倒放甚至发散
+      var raw = (now - last) / 1000;
+      if (!(raw > 0 && raw < 5)) raw = 0.016;
+      var dt = Math.min(0.05, raw);
       last = now;
 
       if (art && art.classList.contains('show')) {

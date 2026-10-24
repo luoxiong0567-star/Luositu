@@ -108,13 +108,18 @@
       loadScene: load,
       onExit: function (toHome) {
         if (toHome && HL.home) { hideGallery(); HL.home.show(); }
-        else showGallery();
+        else {
+          showGallery();
+          if (HL.Piano) { try { HL.Piano.stop(1.6); } catch (e) { } }
+        }
       }
     });
     function startJourney() {
-      if (HL.home) HL.home.hide();
+      // 配乐延续：从首页过来时不掐断，直接 URL 进来的话在这里起播
+      if (HL.home) HL.home.hide(null, true);
       hideGallery();
       hideGuide();
+      if (HL.Piano) { try { HL.Piano.play(); } catch (e) { } }
       HL.journey.start(HL.JOURNEY, 0);
     }
     HL.startJourney = startJourney;
