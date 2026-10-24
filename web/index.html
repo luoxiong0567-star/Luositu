@@ -6,6 +6,18 @@
 <title>人类之光 · HUMAN LIGHT</title>
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/katex.css">
+<script>
+/* 线上分享入口转发
+   云端分享链接带 ?sharecode= 且只对首个请求放行，页面里的 css/js 子请求会被网关
+   403 拦掉，整站会退化成无样式的裸 HTML。因此线上统一转到单文件自包含入口
+   single.html（全部资源内联，只有一次请求，天然带 sharecode）。
+   本地 file:// 打开没有 sharecode、且单文件自身路径以 single.html 结尾，均不会跳转。 */
+(function () {
+  if (!/[?&]sharecode=/.test(location.search)) return;
+  if (/single\.html/.test(location.pathname)) return;
+  location.replace('single.html' + location.search);
+})();
+</script>
 </head>
 <body>
 <div id="app">

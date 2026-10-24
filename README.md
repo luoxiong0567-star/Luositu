@@ -48,6 +48,18 @@ python build_single_html.py 自定义路径.html     # 仅导出单文件到指�
 
 **注意**：`web/index.html` 不能单独拿走——它是相对路径引用 `css/`、`js/`、`vendor/` 的入口，脱离目录即白屏。要单文件分享请用上面导出的 `.html`。
 
+### 线上发布（WorkBuddy「发布为网站」）
+
+云端的分享链接带 `?sharecode=` 才放行，而且**只对首个 HTML 请求生效**：页面里的 `<link href="css/main.css">`、`<script src="js/main.js">` 是浏览器另发的请求，不带该参数，会被网关直接 403。多文件形态上线后表现为「整页白底黑字的裸 HTML」——样式与脚本一个都没加载。
+
+因此线上必须走**单文件入口**：
+
+1. `build_single_html.py` 默认构建后自动把 `release/人类之光.html` 复制为 `web/single.html`（全部资源内联，只有一次请求，天然带 sharecode）。
+2. `web/index.html` 里有一小段转发脚本：检测到 `?sharecode=` 且当前不是 `single.html` 时，`location.replace('single.html' + location.search)`。本地 `file://` 无此参数、单文件自身也不匹配，均不会跳转。
+3. 发布目录仍是 `web/`，所以链接与 app 不变，无需传 `entryHtml`。
+
+发布后若根链接仍是旧内容，多半是 CDN 缓存（响应头 `Age` 非 0），等缓存过期即可；单文件入口可带上 `?sharecode=` 直接访问，绕开缓存立即验证。
+
 ## 从源码开发
 
 ```bat

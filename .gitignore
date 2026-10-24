@@ -17,3 +17,8 @@ _clean_log.txt
 # 系统文件
 Thumbs.db
 .DS_Store
+
+# 平台发布标记与线上入口副本（由 build_single_html.py / 发布工具生成）
+*.genie
+.workbuddy/
+web/single.html

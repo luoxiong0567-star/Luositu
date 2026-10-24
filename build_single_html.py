@@ -13,6 +13,7 @@
 import os
 import re
 import sys
+import shutil
 import zipfile
 import datetime
 
@@ -20,6 +21,10 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(ROOT, 'web')
 DEFAULT_OUT = os.path.join(ROOT, 'release', '人类之光.html')
 DEFAULT_ZIP = os.path.join(ROOT, 'release', '人类之光-网页版.zip')
+# 线上发布入口：云端分享链接的 sharecode 只对首个 HTML 请求生效，
+# 页面里的 css / js 子请求不带该参数、会被网关 403 拦掉（表现为整页无样式的裸 HTML）。
+# 因此线上必须用「单文件」作为入口，全部资源内联，只有一次请求。
+SINGLE_ENTRY = os.path.join(WEB, 'single.html')
 
 # 内联时会破坏 HTML 结构的字符序列 —— 出现即说明该文件不能直接内联
 FORBIDDEN = ['</script', '<!--', '<style', '</style']
@@ -101,6 +106,10 @@ def build_zip(zip_path):
         for dirpath, _dirs, files in os.walk(WEB):
             for name in files:
                 full = os.path.join(dirpath, name)
+                if os.path.abspath(full) == os.path.abspath(SINGLE_ENTRY):
+                    continue          # 线上入口副本不进 zip（单文件版已在 release/）
+                if name.endswith('.genie') or '.workbuddy' in dirpath:
+                    continue          # 平台发布标记，不属于交付内容
                 rel = os.path.join('人类之光-网页版', 'web',
                                    os.path.relpath(full, WEB))
                 zf.write(full, rel)
@@ -117,3 +126,6 @@ if __name__ == '__main__':
     if not explicit_out:
         # 默认模式：同时刷新 zip；显式指定输出路径时只导出单文件
         build_zip(DEFAULT_ZIP)
+        # 同步线上发布入口（单文件），保证重新发布时拿到的是自包含版本
+        shutil.copyfile(DEFAULT_OUT, SINGLE_ENTRY)
+        print('输出: %s（线上发布入口）' % SINGLE_ENTRY)
