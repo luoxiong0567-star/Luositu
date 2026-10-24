@@ -18,6 +18,7 @@ const QUALITY = 58;               // JPEG 质量
 //       node _thumbs.js math       只重拍指定场景（合并进已有 thumbs.js，不清空其它）
 const SHOTS = [
   { id: 'solar', q: '' },
+  { id: 'cosmos', q: '', pre: 'HL.manager.inst.setParam("view","galaxy");' },
   { id: 'periodic', q: '?chamber=1&Z=26' },
   { id: 'neural', q: '' },
   {

@@ -90,7 +90,7 @@ function httpReq(url, method) {
       });
     })()`);
     const v = r.val || {};
-    const ok = v.show && v.cards === 15 && v.imgs === 15 && v.imgOk === 15 && /十五/.test(v.head || '') && !r.errors.length;
+    const ok = v.show && v.cards === 16 && v.imgs === 16 && v.imgOk === 16 && /十六/.test(v.head || '') && !r.errors.length;
     if (!ok) bad++;
     log('── gallery    ' + (ok ? 'PASS' : 'FAIL') + '  cards=' + v.cards + ' imgs=' + v.imgOk + '  ' + (v.head || '') + (r.errors.length ? '  !! ' + r.errors[0] : ''));
   }

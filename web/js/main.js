@@ -9,6 +9,7 @@
   var currentId = null;
   var state = {};               // 每个场景的参数记忆
   var urlApplied = {};          // URL 查询参数只注入一次
+  var quiet = false;            // 速览播放中：不弹首次引导
 
   function init() {
     canvas = document.getElementById('gl');
@@ -24,6 +25,10 @@
     HL.tooltip = { show: showTooltip, hide: hideTooltip };
     HL.toast = showToast;
     HL.manager = manager;
+    // 供速览 / 开篇页调用
+    HL.loadScene = function (id, byUser) { load(id, byUser !== false); };
+    HL.showGallery = showGallery;
+    HL.setQuiet = function (v) { quiet = !!v; if (v) hideGuide(); };
     // 供场景在子场景切换后重建参数面板 / 改写副标题
     HL.rebuildPanel = rebuildPanel;
     HL.setDesc = function (t) {
@@ -58,6 +63,10 @@
 
     window.addEventListener('keydown', function (e) {
       if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      // 速览播放中：按键交给播放器（它在捕获阶段已 stopPropagation，这里只是兜底）
+      if (HL.journey && HL.journey.active()) return;
+      // 开篇页打开时：Enter / J 由开篇页处理，Esc 只是跳过动画
+      if (HL.home && HL.home.isOpen()) return;
       var k = e.key.toLowerCase();
       if (k === 'r') { manager.resetView(); return; }
       if (k === 'f') { toggleFullscreen(); return; }
@@ -70,7 +79,8 @@
       else if (k === '=') idx = 11;         // = → 第 12 个
       else if (k === 'q') idx = 12;         // q → 第 13 个
       else if (k === 'w') idx = 13;         // w → 第 14 个
-      else if (k === 'e') idx = 14;         // e → 第 15 个
+      else if (k === 'e') idx = 14;
+      else if (k === 't') idx = 15;         // e → 第 15 个
       if (idx >= 0) {
         var list = HL.allScenes();
         if (list[idx]) load(list[idx].id, true);
@@ -90,9 +100,44 @@
     var hash = (location.hash || '').replace('#', '');
     var list = HL.allScenes();
     var direct = hash && HL.getScene(hash) ? hash : null;
+    var noHome = /[?&]home=0/.test(location.search);
+    var wantJourney = /[?&]journey=1/.test(location.search);
+
+    // 跨场景播放器（「五分钟速览」）：退出后回到目录页，或回到开篇
+    HL.journey = HL.Journey({
+      loadScene: load,
+      onExit: function (toHome) {
+        if (toHome && HL.home) { hideGallery(); HL.home.show(); }
+        else showGallery();
+      }
+    });
+    function startJourney() {
+      if (HL.home) HL.home.hide();
+      hideGallery();
+      hideGuide();
+      HL.journey.start(HL.JOURNEY, 0);
+    }
+    HL.startJourney = startJourney;
+
     // 先开目录再 load：目录页打开时引导浮层会延迟到关闭目录后补弹
     if (!direct) showGallery();
     load(direct || list[0].id);
+
+    // 开篇页：没有直达链接时铺满全屏；侧栏品牌随时可点回来
+    if (HL.createHome) {
+      HL.home = HL.createHome({
+        onEnter: function () { showGallery(); },
+        onJourney: startJourney
+      });
+      if (!direct && !noHome) HL.home.show();
+      if (wantJourney) startJourney();
+      var brand = document.querySelector('#sidebar .brand');
+      if (brand) {
+        brand.style.cursor = 'pointer';
+        brand.title = '回到开篇';
+        brand.addEventListener('click', function () { hideGallery(); HL.home.show(); });
+      }
+    }
   }
 
   /* ---------------- 侧栏 ---------------- */
@@ -173,6 +218,7 @@
   }
 
   function showGuide(def) {
+    if (quiet) return;
     var seen = {};
     try { seen = JSON.parse(localStorage.getItem('hl.guide.v1') || '{}'); } catch (e) { /* 隐私模式等 */ }
     var force = /[?&]guide=1/.test(location.search);   // ?guide=1 强制重看
@@ -228,6 +274,7 @@
   /* ---------------- 场景目录页 ---------------- */
   var CATALOG = {
     solar: 'J2000 真实轨道根数 + 开普勒定律：0.1–365 天/秒可调，可切真实比例',
+    cosmos: '仰望银河 · 四条旋臂 · 深空星系群：同一座星系的三层尺度',
     periodic: '118 种元素三维排布，点击元素升起玻璃样品舱观察气 / 液 / 固三态',
     neural: '前向传播逐层点亮，连线粗细即权重强度',
     math: '贝叶斯推断 · 正态分布 · 欧几里得几何 · 信息熵：四个可交互的模型',
@@ -247,7 +294,7 @@
 
   /* 场景目录 · 四章叙事结构 */
   var CHAPTERS = [
-    { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
+    { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'cosmos', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
     { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 细胞 · 生命之光', ids: ['periodic', 'molecule', 'animalcell', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
     { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体', ids: ['neural', 'aiagent', 'neuralnet'] }
@@ -267,7 +314,7 @@
     // 快捷键按「注册顺序」定，卡片按「章节叙事顺序」排 —— 两者解耦，
     // 新增场景可以插进任意章节而不打乱已有快捷键。
     var regOrder = all.map(function (d) { return d.id; });
-    var KEYSEQ = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e'];
+    var KEYSEQ = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e', 't'];
     function keyOfId(id) {
       var i = regOrder.indexOf(id);
       return i >= 0 ? (KEYSEQ[i] || '') : '';

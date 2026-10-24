@@ -872,6 +872,7 @@ HL.registerScene({
     stageEl.appendChild(fadeEl);
 
     var badge = document.createElement('div');
+    badge.className = 'hl-photo-badge';
     badge.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:14px;display:flex;gap:12px;' +
       'align-items:center;padding:8px 16px;border-radius:11px;background:rgba(8,13,26,.82);' +
       'border:1px solid rgba(77,226,255,.22);backdrop-filter:blur(10px);font-size:11.5px;color:#dce7f5;' +

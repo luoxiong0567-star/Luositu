@@ -298,6 +298,7 @@ HL.registerScene({
 
       setParam: function (key, v, user) {
         if (key === 'tour') { tour.toggle(); return; }
+        if (key === 'hint') { chHint.visible = !!v; return; }
         params[key] = v;
         if (key === 'logT') chamber.setTemperature(Math.pow(10, v));
         if (key === 'refract') chamber.setRefract(v, user ? 'user' : 'init');

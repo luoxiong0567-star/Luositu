@@ -77,9 +77,12 @@ function httpReq(url, method) {
   // A. 首页：侧栏常驻 + 四章分组 + 目录页卡片
   await send('Page.navigate', { url: URL_BASE + '?_t=' + Date.now() });
   await sleep(4000);
+  // 开篇页会盖住目录，先把开篇收掉，本用例只测侧栏与目录
+  await evalx('(function(){ if (HL.home) HL.home.hide(); return 1; })()');
+  await sleep(800);
   const a = await evalx(probe) || {};
   const expectCh = ['Ⅰ · 宇宙的法则', 'Ⅱ · 物质的语言', 'Ⅲ · 规律的抽象', 'Ⅳ · 思维的光芒'];
-  const okA = a.galShow && a.sbW >= 200 && a.cards === 15 && a.items === 15 &&
+  const okA = a.galShow && a.sbW >= 200 && a.cards === 16 && a.items === 16 &&
     a.galCh === 0 && a.galGrid === 1 &&
     JSON.stringify(a.chapters) === JSON.stringify(expectCh);
   log('── 首页侧栏+四章   ' + (okA ? 'PASS' : 'FAIL') + '  sidebarW=' + a.sbW + ' cards=' + a.cards +
@@ -98,7 +101,7 @@ function httpReq(url, method) {
     }
     return out;
   })())`) || [];
-  const expectGroups = ['solar,gravity,massenergy,maxwell,emwave', 'periodic,molecule,animalcell,photosynthesis', 'math,fourier,interference', 'neural,aiagent,neuralnet'];
+  const expectGroups = ['solar,cosmos,gravity,massenergy,maxwell,emwave', 'periodic,molecule,animalcell,photosynthesis', 'math,fourier,interference', 'neural,aiagent,neuralnet'];
   const okB = JSON.stringify(b) === JSON.stringify(expectGroups);
   log('── 分组归属        ' + (okB ? 'PASS' : 'FAIL') + '  ' + JSON.stringify(b));
   if (!okB) bad++;
@@ -107,7 +110,7 @@ function httpReq(url, method) {
   await evalx(`(function(){ var it=document.querySelector('#sceneList .scene-item[data-id="periodic"]'); if(it) it.click(); return '1'; })()`);
   await sleep(3000);
   const c = await evalx(probe) || {};
-  const okC = !c.galShow && c.sbW >= 200 && c.active === 'periodic' && c.items === 15;
+  const okC = !c.galShow && c.sbW >= 200 && c.active === 'periodic' && c.items === 16;
   log('── 侧栏进场景      ' + (okC ? 'PASS' : 'FAIL') + '  active=' + c.active + ' sidebarW=' + c.sbW +
     ' 目录页=' + c.galShow + (errors.length ? '  !! ' + errors[0] : ''));
   if (!okC) bad++;
@@ -116,7 +119,7 @@ function httpReq(url, method) {
   await evalx(`(function(){ window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); return '1'; })()`);
   await sleep(1500);
   const d = await evalx(probe) || {};
-  const okD = d.galShow && d.sbW >= 200 && d.cards === 15;
+  const okD = d.galShow && d.sbW >= 200 && d.cards === 16;
   log('── Esc 回目录      ' + (okD ? 'PASS' : 'FAIL') + '  sidebarW=' + d.sbW + ' cards=' + d.cards);
   if (!okD) bad++;
 

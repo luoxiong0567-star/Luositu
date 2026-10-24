@@ -132,7 +132,7 @@ function httpReq(url, method) {
         foot: g ? (g.querySelector('.gal-foot')||{}).textContent || '' : ''
       });
     })()`) || {};
-    const ok = v.show && v.chapters === 0 && v.cards === 15 && v.imgs >= 15 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
+    const ok = v.show && v.chapters === 0 && v.cards === 16 && v.imgs >= 16 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
     if (!ok) bad++;
     log('── 目录页平铺       ' + (ok ? 'PASS' : 'FAIL') + '  分组标题=' + v.chapters + ' cards=' + v.cards + ' imgs=' + v.imgs +
       ' [' + (v.chNames || []).join(' | ') + ']' + (r.errors.length ? ' !! ' + r.errors[0] : ''));
