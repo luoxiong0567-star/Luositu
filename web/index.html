@@ -63,6 +63,10 @@
     </div>
   </main>
 
+  <!-- 窄屏：侧栏改为抽屉式，用这颗浮动按钮唤出 -->
+  <button id="mobileMenu" aria-label="打开场景目录" title="场景目录">☰</button>
+  <div id="scrim"></div>
+
 </div>
 
 <script src="vendor/three.min.js"></script>
@@ -96,6 +100,7 @@
 <!-- 内嵌页面场景：放在最后，保持既有 12 个场景的快捷键不变（aiagent=q，neuralnet=w） -->
 <script src="js/scenes/aiAgent.js"></script>
 <script src="js/scenes/neuralLab.js"></script>
+<script src="js/scenes/animalCell.js"></script>
 <script src="js/cloud.js"></script>
 <script src="js/main.js"></script>
 </body>

@@ -36,12 +36,12 @@
     function calc() {
       // 全部换算到 canvas 坐标系（页面左侧有侧栏，getBoundingClientRect 是视口坐标）
       var cv = document.getElementById('gl');
-      if (!cv) return { W: window.innerWidth, H: window.innerHeight, L: 0, R: 0, T: 0 };
+      if (!cv) return { W: window.innerWidth, H: window.innerHeight, L: 0, R: 0, T: 0, B: 0 };
       var cr = cv.getBoundingClientRect();
       var W = cr.width, H = cr.height;
-      var L = 0, R = 0, T = 0;
+      var L = 0, R = 0, T = 0, B = 0;
       var gal = document.getElementById('gallery');
-      if (gal && gal.classList.contains('show')) return { W: W, H: H, L: 0, R: 0, T: 0 };
+      if (gal && gal.classList.contains('show')) return { W: W, H: H, L: 0, R: 0, T: 0, B: 0 };
       var hud = document.getElementById('gravHud');
       if (hud) {
         var r = hud.getBoundingClientRect();
@@ -50,30 +50,41 @@
       var panel = document.getElementById('panel');
       if (panel && panel.classList.contains('show')) {
         var pr = panel.getBoundingClientRect();
-        if (pr.width > 40 && pr.height > 40) R = cr.right - pr.left + MARGIN;
+        if (pr.width > 40 && pr.height > 40) {
+          // 窄屏下面板是「贴底横铺」而不是「右侧竖栏」：按几何形状判断它压在哪一边，
+          // 否则 R 会被算成整屏宽，视锥偏移把主体推到画面外面去
+          var isBottom = pr.width > pr.height || pr.width > W * 0.62;
+          if (isBottom) B = cr.bottom - pr.top + MARGIN;
+          else R = cr.right - pr.left + MARGIN;
+        }
       }
       var tb = document.getElementById('titlebar');
       if (tb) {
         var tr = tb.getBoundingClientRect();
         if (tr.height > 10 && tr.width > 10) T = tr.bottom - cr.top + MARGIN;
       }
-      return { W: W, H: H, L: L, R: R, T: T };
+      return { W: W, H: H, L: L, R: R, T: T, B: B };
     }
 
     function apply(camera) {
       if (!camera || !camera.setViewOffset) return;
       var a = calc();
-      var key = [Math.round(a.W), Math.round(a.H), Math.round(a.L), Math.round(a.R), Math.round(a.T)].join(',');
+      var key = [Math.round(a.W), Math.round(a.H), Math.round(a.L), Math.round(a.R),
+        Math.round(a.T), Math.round(a.B)].join(',');
       if (key === lastKey) return;
       lastKey = key;
-      if (a.L < 1 && a.R < 1 && a.T < 1) {
+      if (a.L < 1 && a.R < 1 && a.T < 1 && a.B < 1) {
         if (camera.view && camera.view.enabled) {
           camera.clearViewOffset();
           camera.updateProjectionMatrix();
         }
       } else {
-        // 子窗口与全屏同尺寸 → 等效平移视锥：内容左移 (R-L)/2、上移 T/2
-        camera.setViewOffset(a.W, a.H, (a.R - a.L) / 2, a.T / 2, a.W, a.H);
+        // 子窗口与全屏同尺寸 → 等效平移视锥。
+        // offsetY 为正 = 内容上移：右侧没有竖栏、只有底部横面板时，
+        // 目标是把主体摆到「标题栏以下、面板以上」这段可用区的中心，
+        // 也就是上移 (B-T)/2；桌面（B=0）沿用原行为，不去动已调好的机位。
+        var oy = a.B > 0 ? (a.B - a.T) / 2 : a.T / 2;
+        camera.setViewOffset(a.W, a.H, (a.R - a.L) / 2, oy, a.W, a.H);
       }
     }
 

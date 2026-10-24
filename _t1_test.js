@@ -11,7 +11,7 @@ const URL_BASE = 'file:///C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-ligh
 
 // 12 个 3D 场景（registration 顺序；aiagent 为内嵌页面，不参与讲解模式回归）
 const SCENES = ['solar', 'periodic', 'neural', 'math', 'interference', 'molecule',
-  'fourier', 'emwave', 'photosynthesis', 'maxwell', 'massenergy', 'gravity'];
+  'animalcell', 'fourier', 'emwave', 'photosynthesis', 'maxwell', 'massenergy', 'gravity'];
 
 function httpReq(url, method) {
   return new Promise((res, rej) => {
@@ -77,7 +77,7 @@ function httpReq(url, method) {
     return { evalx, shot, close: async () => { try { ws.close(); } catch (e) {} await httpReq('http://127.0.0.1:' + PORT + '/json/close/' + t.id).catch(() => {}); }, errors };
   }
 
-  /* ---------- A. 13 场景讲解模式 ---------- */
+  /* ---------- A. 13 场景讲解模式（含动物细胞） ---------- */
   for (const sc of SCENES) {
     const r = await open(URL_BASE + '?_t=' + Date.now() + '#' + sc, sc === 'photosynthesis' || sc === 'massenergy' ? 5000 : 4200);
     const v = await r.evalx(`(function(){
@@ -118,7 +118,7 @@ function httpReq(url, method) {
     await r.close();
   }
 
-  /* ---------- B. 目录页（卡片平铺 + 13 场景） ---------- */
+  /* ---------- B. 目录页（卡片平铺 + 15 场景） ---------- */
   {
     const r = await open(URL_BASE + '?_t=' + Date.now(), 3500);
     const v = await r.evalx(`(function(){
@@ -132,7 +132,7 @@ function httpReq(url, method) {
         foot: g ? (g.querySelector('.gal-foot')||{}).textContent || '' : ''
       });
     })()`) || {};
-    const ok = v.show && v.chapters === 0 && v.cards === 14 && v.imgs >= 14 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
+    const ok = v.show && v.chapters === 0 && v.cards === 15 && v.imgs >= 15 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
     if (!ok) bad++;
     log('── 目录页平铺       ' + (ok ? 'PASS' : 'FAIL') + '  分组标题=' + v.chapters + ' cards=' + v.cards + ' imgs=' + v.imgs +
       ' [' + (v.chNames || []).join(' | ') + ']' + (r.errors.length ? ' !! ' + r.errors[0] : ''));

@@ -20,6 +20,7 @@ const SHOTS = [
   { id: 'math', q: '' },
   { id: 'interference', q: '' },
   { id: 'molecule', q: '' },
+  { id: 'animalcell', q: '' },
   { id: 'fourier', q: '' },
   { id: 'emwave', q: '' },
   { id: 'photosynthesis', q: '?level=mol' },

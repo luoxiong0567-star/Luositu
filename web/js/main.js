@@ -37,6 +37,25 @@
     if (HL.Cloud) HL.Cloud.mount();
     document.getElementById('galleryBtn').addEventListener('click', showGallery);
 
+    // 窄屏抽屉：浮动菜单按钮唤出侧栏；遮罩 / 选中场景后自动收起
+    (function () {
+      var sideEl = document.getElementById('sidebar');
+      var scrimEl = document.getElementById('scrim');
+      var menuBtn = document.getElementById('mobileMenu');
+      if (!sideEl || !scrimEl || !menuBtn) return;
+      function closeDrawer() {
+        sideEl.classList.remove('open');
+        scrimEl.classList.remove('open');
+      }
+      HL.closeDrawer = closeDrawer;
+      menuBtn.addEventListener('click', function () {
+        var on = !sideEl.classList.contains('open');
+        sideEl.classList.toggle('open', on);
+        scrimEl.classList.toggle('open', on);
+      });
+      scrimEl.addEventListener('click', closeDrawer);
+    })();
+
     window.addEventListener('keydown', function (e) {
       if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
       var k = e.key.toLowerCase();
@@ -51,6 +70,7 @@
       else if (k === '=') idx = 11;         // = → 第 12 个
       else if (k === 'q') idx = 12;         // q → 第 13 个
       else if (k === 'w') idx = 13;         // w → 第 14 个
+      else if (k === 'e') idx = 14;         // e → 第 15 个
       if (idx >= 0) {
         var list = HL.allScenes();
         if (list[idx]) load(list[idx].id, true);
@@ -136,6 +156,8 @@
 
     buildPanel(def);
     scheduleGuide(def);
+    // 窄屏抽屉里点场景后要把抽屉收起来，否则一直挡着画面
+    if (HL.closeDrawer) HL.closeDrawer();
   }
 
   /* ---------------- 首次引导浮层 ---------------- */
@@ -210,7 +232,8 @@
     neural: '前向传播逐层点亮，连线粗细即权重强度',
     math: '参数曲面家族与洛伦兹混沌吸引子',
     interference: '杨氏双缝波动光学，光子模式下看概率如何堆出条纹',
-    molecule: 'DNA 双螺旋与蛋白质二级结构',
+    molecule: 'DNA 双螺旋与蛋白质二级结构（写实渲染）',
+    animalcell: '动物细胞三维剖面：细胞核、内质网、高尔基体、线粒体与磷脂双分子层',
     fourier: '方波由谐波现场叠加合成，傅里叶级数可视化',
     emwave: 'E⊥B 正交振荡的平面电磁波',
     photosynthesis: '叶片 → 叶绿体 → 分子三级缩放，光反应与卡尔文循环',
@@ -225,7 +248,7 @@
   /* 场景目录 · 四章叙事结构 */
   var CHAPTERS = [
     { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
-    { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 生命之光', ids: ['periodic', 'molecule', 'photosynthesis'] },
+    { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 细胞 · 生命之光', ids: ['periodic', 'molecule', 'animalcell', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
     { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体', ids: ['neural', 'aiagent', 'neuralnet'] }
   ];
@@ -241,11 +264,22 @@
       '<p>' + cn + '个三维科学可视化场景 · 点击卡片进入 · Esc 返回目录 · 作者 罗司徒</p></div>';
     var cards = [];
 
-    function keyOf(i) {
-      return i < 9 ? String(i + 1) : (['0', '-', '=', 'q', 'w'][i - 9] || '');
+    // 快捷键按「注册顺序」定，卡片按「章节叙事顺序」排 —— 两者解耦，
+    // 新增场景可以插进任意章节而不打乱已有快捷键。
+    var regOrder = all.map(function (d) { return d.id; });
+    var KEYSEQ = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e'];
+    function keyOfId(id) {
+      var i = regOrder.indexOf(id);
+      return i >= 0 ? (KEYSEQ[i] || '') : '';
     }
-    function addCard(def, i) {
-      var key = keyOf(i);
+    var display = [];
+    CHAPTERS.forEach(function (ch) {
+      ch.ids.forEach(function (id) { if (HL.getScene(id)) display.push(HL.getScene(id)); });
+    });
+    all.forEach(function (d) { if (display.indexOf(d) < 0) display.push(d); });
+
+    function addCard(def) {
+      var key = keyOfId(def.id);
       html += '<div class="gal-card" data-id="' + def.id + '" title="快捷键 ' + key + '">' +
         '<div class="gal-img"></div>' +
         '<div class="gal-meta"><div class="gal-name"><span class="gal-ico">' + def.icon + '</span>' + def.name + '</div>' +
@@ -255,7 +289,7 @@
 
     // 首页右侧扁平化：全部场景一张网格，不分组（四章分组只保留在左侧目录栏）
     html += '<div class="gal-grid">';
-    all.forEach(function (def, i) { addCard(def, i); });
+    display.forEach(function (def) { addCard(def); });
     html += '</div>';
     html += '<div class="gal-foot">宇宙用数学写就，而人类学会了阅读 —— 既仰望星空，也凝视自身</div>';
     galleryEl.innerHTML = html;
@@ -278,6 +312,7 @@
     if (!galleryEl) return;
     galleryEl.classList.add('show');
     hideGuide();
+    if (HL.closeDrawer) HL.closeDrawer();
     // 清掉 hash，刷新后仍停留在目录页
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* 个别环境受限 */ }
   }
