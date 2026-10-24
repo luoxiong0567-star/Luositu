@@ -58,7 +58,7 @@ python build_single_html.py 自定义路径.html     # 仅导出单文件到指�
 2. `web/index.html` 里有一小段转发脚本：检测到 `?sharecode=` 且当前不是 `single.html` 时，`location.replace('single.html' + location.search)`。本地 `file://` 无此参数、单文件自身也不匹配，均不会跳转。
 3. 发布目录仍是 `web/`，所以链接与 app 不变，无需传 `entryHtml`。
 
-发布后若根链接仍是旧内容，多半是 CDN 缓存（响应头 `Age` 非 0），等缓存过期即可；单文件入口可带上 `?sharecode=` 直接访问，绕开缓存立即验证。
+发布后若原样链接仍是旧内容：CDN 的缓存键**包含完整查询串**，`?sharecode=RF2TV443LO` 这个精确 URL 一旦被缓存，重新发布不会刷新它（无缓存刷新入口，TTL 未知，实测可挂数小时以上）。绕开办法：在链接末尾追加一个新版本参数，如 `?sharecode=RF2TV443LO&r=2`（缓存键变了就回源），转发脚本会原样保留参数传给 single.html。**约定：每次重新发布后把 r 的数字加一，把带新 r 的链接发给用户**；不带参数的原链接会在 CDN 过期后自行恢复。
 
 ## 云服务（WorkBuddy Cloud Service）
 
