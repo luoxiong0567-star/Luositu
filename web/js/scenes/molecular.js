@@ -859,19 +859,19 @@ HL.registerScene({
       /* 标注锚点 */
       var lab = [];
       var an1 = new THREE.Object3D(); an1.position.copy(bp[Math.floor(n * 0.28)].a); cur.group.add(an1);
-      lab.push({ name: '糖—磷酸骨架', sub: '5′→3′', obj: an1, ox: -178, oy: -86 });
+      lab.push({ name: '糖—磷酸骨架', sub: '5′→3′', obj: an1, ox: -338, oy: -46 });
       if (baseSites.length > Math.floor(n * 0.55)) {
         var an2 = new THREE.Object3D();
         an2.position.copy(baseSites[Math.floor(n * 0.55)].p);
         cur.group.add(an2);
-        lab.push({ name: '碱基对', sub: 'A—T / G—C', obj: an2, ox: 186, oy: 62 });
+        lab.push({ name: '碱基对', sub: 'A—T / G—C', obj: an2, ox: 240, oy: 54 });
       }
       cur.labels = lab;
 
       cur.kind = 'dna';
       cur.stats = { bp: n, bases: baseSites.length, curveA: ptA.length };
       // fit = 机位距离。旧版 home 约 34，这里沿用同一量级，速览里 zoom 1.85 的取景才不会变
-      return { span: (n - 1) * RISE * 0.5 + 1.5, radius: R * 1.42, fit: 35 };
+      return { span: (n - 1) * RISE * 0.5 + 1.5, radius: R * 1.42, fit: 42 };
     }
 
     /* ---------------- α 螺旋 ---------------- */
@@ -956,18 +956,18 @@ HL.registerScene({
       var an1 = new THREE.Object3D();
       an1.position.copy(pts[Math.floor(pts.length * 0.30)]);
       cur.group.add(an1);
-      lab.push({ name: '主链缎带', sub: 'α-helix', obj: an1, ox: -172, oy: -84 });
+      lab.push({ name: '主链缎带', sub: 'α-helix', obj: an1, ox: -262, oy: -52 });
       if (ca.length > 12) {
         var an2 = new THREE.Object3D();
         an2.position.set(ca[12].x * 0.42, ca[12].y, ca[12].z * 0.42);
         cur.group.add(an2);
-        lab.push({ name: 'i → i+4 氢键', sub: '每圈 3.6 残基', obj: an2, ox: 176, oy: 66 });
+        lab.push({ name: 'i → i+4 氢键', sub: '每圈 3.6 残基', obj: an2, ox: 218, oy: 58 });
       }
       cur.labels = lab;
 
       cur.kind = 'alpha';
       cur.stats = { residues: n, samples: pts.length };
-      return { span: (n - 1) * RISE * 0.5 + 1.4, radius: R + 2.4, fit: 22 };
+      return { span: (n - 1) * RISE * 0.5 + 1.4, radius: R + 2.4, fit: 27 };
     }
 
     /* ---------------- β 折叠 ---------------- */
@@ -1067,13 +1067,14 @@ HL.registerScene({
 
       var lab = [];
       var an1 = new THREE.Object3D();
-      an1.position.copy(strands[0][Math.floor(n * 0.5)]);
+      // 片层几乎占满画面宽度，标签只能落在上下两条窄空带里，锚点要选最近的那条链
+      an1.position.copy(strands[3][Math.floor(n * 0.35)]);
       cur.group.add(an1);
-      lab.push({ name: '反向平行的链', sub: 'β-strand', obj: an1, ox: -180, oy: -110 });
+      lab.push({ name: '反向平行的链', sub: 'β-strand', obj: an1, ox: -150, oy: -52 });
       var an2 = new THREE.Object3D();
-      an2.position.copy(strands[1][Math.floor(n * 0.4)]);
+      an2.position.copy(strands[0][Math.floor(n * 0.55)]);
       cur.group.add(an2);
-      lab.push({ name: '链间氢键', sub: '缝合片层', obj: an2, ox: 172, oy: 96 });
+      lab.push({ name: '链间氢键', sub: '缝合片层', obj: an2, ox: 132, oy: 46 });
       cur.labels = lab;
 
       cur.kind = 'beta';
@@ -1283,7 +1284,7 @@ HL.registerScene({
 
       cur.kind = 'nucleosome';
       cur.stats = { nucleosomes: beads, bp: beads * 147 };
-      return { span: (beads - 1) * 6.2 * 0.5 + 2.6, radius: 6.4, fit: 17 };
+      return { span: (beads - 1) * 6.2 * 0.5 + 2.6, radius: 6.4, fit: 15.5 };
     }
 
     /* ================================================================

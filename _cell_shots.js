@@ -29,7 +29,7 @@ const SHOTS = {
     ['dna', '', 'dna-helix.png'],
     ['alpha', '', 'dna-alpha.png'],
     ['beta', '', 'dna-beta.png'],
-    ['dna2', 'close', 'dna-close.png']
+    ['nucleosome', '', 'dna-nucleosome.png']
   ]
 };
 

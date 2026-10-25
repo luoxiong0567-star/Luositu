@@ -129,8 +129,8 @@
       title: '写在分子上的说明书',
       line: '原子按价键拼成分子，分子编成双螺旋：三十亿个字母写下一个人的全部构造，细胞照着它建起一座城。',
       beats: [
-        { scene: 'molecule', params: { mode: 'alpha', spin: true }, zoom: 0.92, lift: 18, ms: 5000, fly: 1500 },
-        { scene: 'molecule', params: { mode: 'dna', unwind: 0.35 }, zoom: 1.14, lift: 40, ms: 6000, fly: 1800 },
+        { scene: 'molecule', params: { mode: 'alpha', spin: true }, zoom: 0.75, lift: 18, ms: 5000, fly: 1500 },
+        { scene: 'molecule', params: { mode: 'dna', unwind: 0.35 }, zoom: 0.95, lift: 40, ms: 6000, fly: 1800 },
         {
           /* 动物细胞：完全按场景「原始页面」的状态放——overview 视角、剖切角度 0（完整球体，
            * 原始页面的默认值就是 0，切开反而像个残球）、不写 cam。相机交给播放器独占
