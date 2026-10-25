@@ -349,6 +349,14 @@
           sunGlow.scale.setScalar(1.1 * pr);
           sunRing.scale.setScalar(pr);
         },
+        /* 供「两分钟速览」使用：星系在自转，太阳标记的世界坐标每帧都在变，
+         * 俯冲镜头必须现取当前位置，写死坐标会冲偏（自转 1°/s 量级）。 */
+        focus: function (name) {
+          if (name !== 'sun' || galaxy.visible === false) return null;
+          var v = new THREE.Vector3();
+          sunGlow.getWorldPosition(v);
+          return v;
+        },
         setParam: function (key, v) {
           if (key === 'view') { setView(v); return; }
           if (key === 'spin') { P.spin = !!v; return; }

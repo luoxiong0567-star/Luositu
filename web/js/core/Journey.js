@@ -233,12 +233,14 @@
       if (!c || !c.camera) return;
 
       var home = c._home, end;
-      if (b.cam) {
-        var pos = new THREE.Vector3(b.cam[0][0], b.cam[0][1], b.cam[0][2]);
+      // cam 可以写成函数：目标在动（比如自转星系里的太阳标记）时开机位现取
+      var cc = (typeof b.cam === 'function') ? b.cam() : b.cam;
+      if (cc) {
+        var pos = new THREE.Vector3(cc[0][0], cc[0][1], cc[0][2]);
         var tgt = new THREE.Vector3(
-          (b.cam[1] && b.cam[1][0]) || 0,
-          (b.cam[1] && b.cam[1][1]) || 0,
-          (b.cam[1] && b.cam[1][2]) || 0
+          (cc[1] && cc[1][0]) || 0,
+          (cc[1] && cc[1][1]) || 0,
+          (cc[1] && cc[1][2]) || 0
         );
         var sph = new THREE.Spherical().setFromVector3(pos.clone().sub(tgt));
         end = { theta: sph.theta, phi: sph.phi, radius: sph.radius, target: tgt };
