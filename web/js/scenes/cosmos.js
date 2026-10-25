@@ -65,13 +65,28 @@
         return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
       }
 
+      /* 柔边圆点贴图：THREE 无贴图的 Points 渲染成实心方块——银河俯瞰时点很小
+       * 看不出来，但速览的俯冲镜头冲到 1.5 单位时满屏马赛克，必须给柔边纹理 */
+      var dotTex = (function () {
+        var cv = document.createElement('canvas');
+        cv.width = cv.height = 64;
+        var c = cv.getContext('2d');
+        var g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = g;
+        c.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(cv);
+      })();
+
       function pointsFrom(arr, opt) {
         var g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arr.pos), 3));
         g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(arr.col), 3));
         var m = new THREE.PointsMaterial({
           size: opt.size, sizeAttenuation: opt.att !== false,
-          vertexColors: true, transparent: true,
+          map: dotTex, vertexColors: true, transparent: true,
           opacity: opt.op === undefined ? 0.95 : opt.op,
           blending: THREE.AdditiveBlending,
           depthWrite: false
