@@ -611,6 +611,29 @@ input[type=range]::-webkit-slider-thumb {
 @media (max-width: 760px) {
   .hl-vig { background: radial-gradient(150% 100% at 50% 46%, rgba(0, 0, 0, 0) 42%, rgba(1, 8, 16, .72) 100%); }
 }
+/* 分子场景：底色压得更黑，边缘留一点紫，才像暗场摄影 */
+.hl-vig-mol {
+  background: radial-gradient(112% 88% at 50% 45%, rgba(0, 0, 0, 0) 30%, rgba(7, 3, 15, .44) 72%, rgba(2, 1, 6, .93) 100%);
+}
+
+/* ---------- 分子场景：3D 锚定的白色引线标注（教科书插画做法） ---------- */
+.mol-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; }
+.mol-leaders { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ml-line { stroke: rgba(240, 246, 255, .46); stroke-width: 1; stroke-linecap: round; }
+.ml-dot { fill: rgba(255, 255, 255, .8); }
+.mol-label {
+  position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+  font-size: 12px; letter-spacing: .04em; color: #f4f7ff; white-space: nowrap;
+  text-shadow: 0 1px 10px rgba(4, 2, 10, .95), 0 0 3px rgba(4, 2, 10, .9);
+}
+.mol-label b { font-weight: 600; }
+.mol-label i {
+  font-style: normal; font-size: 10px; opacity: .52; margin-left: 6px; letter-spacing: .1em;
+}
+@media (max-width: 760px) {
+  .mol-label { font-size: 10.5px; }
+  .mol-label i { display: none; }
+}
 
 /* ---------------- 窄屏布局：抽屉侧栏 + 底部参数面板 ----------------
    760px 以下原来是把 280px 侧栏和 226px 参数面板硬塞进 414px 视口，
