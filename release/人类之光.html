@@ -1592,7 +1592,7 @@ input[type=range]::-webkit-slider-thumb {
   location.replace('single.html' + location.search + location.hash);
 })();
 </script>
-<!-- 人类之光 · 单文件自包含版 · 构建于 2026-10-25 11:38 -->
+<!-- 人类之光 · 单文件自包含版 · 构建于 2026-10-25 11:47 -->
 </head>
 <body>
 <div id="app">
@@ -3196,6 +3196,16 @@ input[type=range]::-webkit-slider-thumb {
       enterBeat(0);
     }
 
+    /* 落参数：幂等，可重复调用。建场慢的场景（细胞/光合作用）第一遍可能
+     * 落在半初始化的对象上被 try 吞掉，beginBeat 时再落一遍兜底。 */
+    function applyParams(b) {
+      var inst = HL.manager && HL.manager.inst;
+      if (!b.params || !inst || !inst.setParam) return;
+      for (var k in b.params) {
+        try { inst.setParam(k, b.params[k]); } catch (e) { /* 场景不认这个参数就算了 */ }
+      }
+    }
+
     function enterBeat(k) {
       bi = k;
       bt = 0;
@@ -3204,6 +3214,11 @@ input[type=range]::-webkit-slider-thumb {
       if (needLoad) {
         curScene = b.scene;
         loadScene(b.scene, false);
+        /* 关键：load 结束后场景实例已同步建好，但 wait 这几帧里它会按
+         * **默认参数**先渲染一遍——元素周期表这种"默认整表 / solo 单原子"
+         * 差别巨大的场景就会在开头闪一帧整表。所以在 load 的同一个任务里
+         * 抢先把参数落下去，首帧即目标形态。 */
+        applyParams(b);
         wait = 3;          // 细胞 / 光合作用 建场要 1–2 s，等几帧再落参数
       } else {
         wait = 1;
@@ -3211,12 +3226,7 @@ input[type=range]::-webkit-slider-thumb {
     }
 
     function beginBeat(b) {
-      var inst = HL.manager && HL.manager.inst;
-      if (b.params && inst && inst.setParam) {
-        for (var k in b.params) {
-          try { inst.setParam(k, b.params[k]); } catch (e) { /* 场景不认这个参数就算了 */ }
-        }
-      }
+      applyParams(b);
       flyTo(b);
     }
 
