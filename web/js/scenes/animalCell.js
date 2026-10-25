@@ -1007,8 +1007,12 @@ HL.registerScene({
     }
 
     // 面板切换：状态 + 相机补间
+    // autoCam === false 表示相机交给外部播放器（Journey）驱动，本场景不再自己补间：
+    // 两套动画同时写 camera.position 会互相打架（前一秒被钉住、之后猛地跳过去），
+    // 看起来就是"卡帧"。此时只切结构状态，机位由外部决定。
     function flyTo(view) {
       applyView(view);
+      if (P.autoCam === false) { fly = null; return; }
       var v = fitView(VIEWS[view] || VIEWS.overview);
       fly = {
         t: 0, dur: 0.95,
@@ -1234,8 +1238,8 @@ HL.registerScene({
       update: function (dt, tt) {
         clock += dt;
 
-        // 相机补间
-        if (fly) {
+        // 相机补间（autoCam === false 时让位给外部播放器，见 flyTo 注释）
+        if (fly && P.autoCam !== false) {
           fly.t += dt / fly.dur;
           var k = Math.min(1, fly.t);
           var e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;   // easeInOutQuad
@@ -1278,6 +1282,9 @@ HL.registerScene({
       setParam: function (key, v) {
         if (key === 'tour') { tour.toggle(); return; }
         P[key] = v;
+        // 交出/收回相机控制权：交出时立刻撤掉未完成的补间，避免残留的对象在
+        // 恢复瞬间把相机猛拽一下
+        if (key === 'autoCam' && v === false) { fly = null; return; }
         if (key === 'view') { flyTo(v); return; }
         if (key === 'labels') {
           labels.forEach(function (l) { l.sp.visible = v && cellGroup.visible; });

@@ -131,7 +131,18 @@
       beats: [
         { scene: 'molecule', params: { mode: 'alpha', spin: true }, lift: 18, ms: 5000, fly: 1500 },
         { scene: 'molecule', params: { mode: 'dna', unwind: 0.35 }, zoom: 1.85, lift: 40, ms: 6000, fly: 1800 },
-        { scene: 'animalcell', params: { view: 'overview', cut: 0.35 }, zoom: 1.15, lift: 16, ms: 7000, fly: 2000 }
+        {
+          /* 动物细胞：完全按场景「原始页面」的状态放——overview 视角、剖切角度 0（完整球体，
+           * 原始页面的默认值就是 0，切开反而像个残球）、不写 cam。相机交给播放器独占
+           * （autoCam:false）——场景自己那套 0.95s 机位补间一旦和播放器同时跑，前半秒被
+           * 钉住、之后猛地跳过去，就是肉眼看到的"卡帧"。
+           * zoom 1.26 / lift 33：原始机位下细胞直径≈满屏高，会被底部字幕卡压掉一截，
+           * 各退一步后球体基本完整落在安全区里。
+           * spin:true 让细胞缓慢自转（0.10 rad/s，一圈约 63 s），落位后画面不停。 */
+          scene: 'animalcell',
+          params: { autoCam: false, view: 'overview', cut: 0, spin: true },
+          zoom: 1.26, lift: 33, ms: 7000, fly: 2200, ease: 'out'
+        }
       ]
     },
 
