@@ -1383,7 +1383,9 @@ HL.registerScene({
     }
 
     function busy() {
-      if (HL.journey && HL.journey.active && HL.journey.active()) return true;
+      // 速览里其余镜头交给底部字幕卡讲，引线标注隐去；但「核小体」那镜是插图式构图，
+      // 白引线正是主角（和讲解模式第 6 步同一套处理）
+      if (HL.journey && HL.journey.active && HL.journey.active()) return P.mode !== 'nucleosome';
       // 讲解模式默认隐去标注，避免和底部字幕卡抢版面；
       // 但「核小体」那一步是插图式构图，白色引线标注正是主角，破例保留
       if (tour && tour.active && tour.active()) {

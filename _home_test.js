@@ -141,7 +141,7 @@ const CANVAS_INK = `(function(){
 
     let last = '', shots = 0;
     const t0 = Date.now();
-    while (Date.now() - t0 < 90000 && shots < 16) {
+    while (Date.now() - t0 < 90000 && shots < 20) {
       const st = await ev('JSON.stringify(HL.journey ? HL.journey.state() : null)');
       if (!st || st === 'null') break;
       const s = JSON.parse(st);
