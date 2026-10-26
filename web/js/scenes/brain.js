@@ -126,17 +126,17 @@
 
       /* ================= 舞台 ================= */
 
-      scene.background = new THREE.Color(0x070706);
-      scene.fog = new THREE.FogExp2(0x070706, 0.007);
+      scene.background = new THREE.Color(0x04080f);
+      scene.fog = new THREE.FogExp2(0x04080f, 0.007);
 
-      scene.add(new THREE.AmbientLight(0x8a7f74, 0.13));
-      var keyL = new THREE.DirectionalLight(0xfff4ea, 1.20); keyL.position.set(14, 10, 16); scene.add(keyL);
-      var rimL = new THREE.DirectionalLight(0xff8a3c, 0.95); rimL.position.set(-14, 2, -8); scene.add(rimL);
-      var fillL = new THREE.DirectionalLight(0x7ac8ff, 0.30); fillL.position.set(-8, -6, 8); scene.add(fillL);
-      var coreL = new THREE.PointLight(0xffa050, 0.9, 30, 1.8); coreL.position.set(0, 0.5, 0); scene.add(coreL);
+      scene.add(new THREE.AmbientLight(0x93b3c9, 0.12));
+      var keyL = new THREE.DirectionalLight(0xf2f8ff, 1.34); keyL.position.set(17, 13, 7); scene.add(keyL);
+      var rimL = new THREE.DirectionalLight(0xc2e0ec, 0.20); rimL.position.set(-14, 2, -8); scene.add(rimL);
+      var fillL = new THREE.DirectionalLight(0x9fc4d8, 0.16); fillL.position.set(-8, -6, 8); scene.add(fillL);
+      var coreL = new THREE.PointLight(0xcfe0ea, 0.18, 30, 1.8); coreL.position.set(0, 0.5, 0); scene.add(coreL);
 
       // 地面反光的一层极淡光斑，避免下半屏纯黑
-      var halo = new THREE.Sprite(ctx.glowSprite('rgba(255,150,80,0.20)'));
+      var halo = new THREE.Sprite(ctx.glowSprite('rgba(110,200,232,0.13)'));
       halo.scale.set(30, 30, 1);
       halo.position.set(0, -1.5, -6);
       scene.add(halo);
@@ -174,9 +174,9 @@
         return s / norm;
       }
       function gyri(x, y, z) {
-        var n = fbm(x * 2.15 + 11.3, y * 2.15 + 5.7, z * 2.15 + 8.1);
+        var n = fbm(x * 3.05 + 11.3, y * 3.05 + 5.7, z * 3.05 + 8.1);
         // ridge：0 在沟底、1 在脊顶；2.2 次幂把沟压窄、脑回加宽
-        var ridge = Math.pow(1 - Math.abs(n * 2 - 1), 2.2);
+        var ridge = Math.pow(1 - Math.abs(n * 2 - 1), 1.75);
         return ridge - 0.42;     // 中心归零：>0 脑回凸起，<0 脑沟凹陷
       }
 
@@ -185,7 +185,7 @@
         var pos = g.attributes.position;
         var col = new Float32Array(pos.count * 3);
         var v = new THREE.Vector3();
-        var cLo = new THREE.Color(0x0b0c0f), cHi = new THREE.Color(0x767c85);
+        var cLo = new THREE.Color(0x05080c), cHi = new THREE.Color(0x8e97a1);
         var cTmp = new THREE.Color();
         for (var i = 0; i < pos.count; i++) {
           v.fromBufferAttribute(pos, i).normalize();
@@ -201,7 +201,7 @@
           rr -= 0.075 * Math.exp(-(x * x) / 0.007) * Math.max(0, y + 0.15);
           rr -= 0.055 * Math.max(0, -y) * Math.max(0, 0.7 - Math.abs(z)); // 颅底内收
           var gg = gyri(x, y, z);
-          rr += 0.115 * gg;                                   // 沟回起伏（ridge 噪声，沟深约 0.6 mm 当量）
+          rr += 0.100 * gg;                                   // 沟回起伏（ridge 噪声，沟深约 0.6 mm 当量）
 
           var px = x * rr * scaleX * base;
           var py = y * rr * scaleY * base;
@@ -210,7 +210,7 @@
 
           // 沟回明暗：凹处暗（模拟沟内的阴影），凸处亮
           var tone = clamp(gg + 0.42, 0, 1);
-          cTmp.copy(cLo).lerp(cHi, Math.pow(tone, 1.35));
+          cTmp.copy(cLo).lerp(cHi, Math.pow(tone, 2.45));
           col[i * 3] = cTmp.r; col[i * 3 + 1] = cTmp.g; col[i * 3 + 2] = cTmp.b;
         }
         g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -221,8 +221,8 @@
       var brainGeoMain = brainGeo(1.0, 0.82, 1.15, R);
 
       var brainMat = new THREE.MeshStandardMaterial({
-        vertexColors: true, roughness: 0.94, metalness: 0.02,
-        color: 0xffffff, transparent: true, opacity: 0.86,
+        vertexColors: true, roughness: 1.0, metalness: 0.0,
+        color: 0xffffff, transparent: true, opacity: 0.955,
         depthWrite: false, side: THREE.FrontSide
       });
       var brain = new THREE.Mesh(brainGeoMain, brainMat);
@@ -231,7 +231,7 @@
 
       // 半透明外壳：只留菲涅耳边缘，让轮廓在暗场里浮出来
       var shellMat = new THREE.ShaderMaterial({
-        uniforms: { uColor: { value: new THREE.Color(0xffb27a) }, uPow: { value: 3.0 }, uInt: { value: 0.10 } },
+        uniforms: { uColor: { value: new THREE.Color(0xdcecf4) }, uPow: { value: 3.8 }, uInt: { value: 0.018 } },
         vertexShader: [
           'varying vec3 vN; varying vec3 vV;',
           'void main(){',
@@ -260,8 +260,8 @@
       /* ---- 扫描亮带：复制脑几何，只亮 |worldY - scanY| 附近 ---- */
       var scanMat = new THREE.ShaderMaterial({
         uniforms: {
-          uY: { value: 0 }, uCol: { value: new THREE.Color(0xff8a3c) },
-          uOp: { value: 0.30 }, uW: { value: 0.52 }
+          uY: { value: 0 }, uCol: { value: new THREE.Color(0xd6eefb) },
+          uOp: { value: 0.26 }, uW: { value: 0.30 }
         },
         vertexShader: [
           'varying vec3 vW;',
@@ -298,7 +298,7 @@
       var discGeo = new THREE.CircleGeometry(R * 0.97, 96);
       discGeo.rotateX(-Math.PI / 2);
       var discMat = new THREE.MeshBasicMaterial({
-        color: 0xff9a50, transparent: true, opacity: 0.016,
+        color: 0xa4bccb, transparent: true, opacity: 0.012,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
       });
       scanGroup.add(new THREE.Mesh(discGeo, discMat));
@@ -320,7 +320,7 @@
       var bsCurve = new THREE.CatmullRomCurve3(bsPts);
       var stem = new THREE.Mesh(
         new THREE.TubeGeometry(bsCurve, 26, R * 0.13, 12, false),
-        new THREE.MeshStandardMaterial({ color: 0x4a4a52, roughness: 0.9, metalness: 0.02 })
+        new THREE.MeshStandardMaterial({ color: 0x7b838d, roughness: 0.9, metalness: 0.02 })
       );
       root.add(stem);
 
@@ -341,7 +341,7 @@
         // 芯 + 外晕两层：被脑壳蒙住之后，单层细管只剩一根"白线"，加晕才有光感
         var g = new THREE.Group();
         g.add(tube(rad, op));
-        g.add(tube(rad * 3.4, op * 0.20));
+        g.add(tube(rad * 2.4, op * 0.11));
         return g;
       }
 
@@ -362,7 +362,7 @@
           Math.sin(ang) * R * 0.40 - R * 0.04
         ));
       }
-      inner.add(glowTube(ccPts, 0.050, 0xffb070, 1.0));
+      inner.add(glowTube(ccPts, 0.042, 0xd8eaf4, 0.95));
 
       // 侧脑室（左右各一，前角向外上翘）
       [-1, 1].forEach(function (s) {
@@ -375,7 +375,7 @@
             (0.62 - 1.30 * t) * R * 0.6
           ));
         }
-        inner.add(glowTube(vp, 0.046, 0xffd0a0, 0.85));
+        inner.add(glowTube(vp, 0.036, 0xe2eef6, 0.80));
       });
 
       // 海马（颞叶内侧的小弧）
@@ -390,7 +390,7 @@
             -R * 0.10 + Math.cos(a) * R * 0.22
           ));
         }
-        inner.add(glowTube(hp, 0.028, 0x8fd6ff, 0.60));
+        inner.add(glowTube(hp, 0.022, 0xa8cce4, 0.55));
       });
 
       // 丘脑：原来是两颗 0.085R 的亮球，正面看像"眼睛"，收到几乎只是两个亮点
@@ -398,7 +398,7 @@
         var th = new THREE.Mesh(
           new THREE.SphereGeometry(R * 0.022, 10, 8),
           new THREE.MeshBasicMaterial({
-            color: 0xffc890, transparent: true, opacity: 0.42,
+            color: 0xb4d2e2, transparent: true, opacity: 0.28,
             blending: THREE.AdditiveBlending, depthWrite: false
           })
         );
@@ -409,8 +409,8 @@
 
       // 机位：fov 40、距离 33 —— 脑高约 11.8，占可见高（24.0）的一半，
       // 上下留出 HUD 的呼吸空间；默认略俯 6°，能同时看到顶面与颞叶
-      camera.position.set(0.4, 6.0, 37.5);
-      controls.target.set(0, 0.4, 0);
+      camera.position.set(0.4, 5.6, 34.6);
+      controls.target.set(0, 1.6, 0);
       camera.fov = 40;
       camera.updateProjectionMatrix();
       controls.syncFromCamera();
@@ -432,7 +432,7 @@
       }
       dustGeo.setAttribute('position', new THREE.BufferAttribute(dpos, 3));
       var dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
-        color: 0xffcf9a, size: 0.075, transparent: true, opacity: 0.34,
+        color: 0xb6c9d6, size: 0.075, transparent: true, opacity: 0.26,
         blending: THREE.AdditiveBlending, depthWrite: false
       }));
       scene.add(dust);
@@ -457,9 +457,7 @@
         '<div class="bh-slices" id="bhSlices"></div>',
         '<div class="bh-card" id="bhCard"></div>',
         '<div class="bh-findings" id="bhFind"></div>',
-        '<div class="bh-panels" id="bhPanels"></div>',
-        '<div class="bh-labels" id="bhLabels"></div>',
-        '<div class="bh-run"><i id="bhRun"></i></div>'
+        '<div class="bh-labels" id="bhLabels"></div>'
       ].join('');
       if (stageEl) stageEl.appendChild(hud);
 
@@ -468,11 +466,9 @@
       var elThk = hud.querySelector('#bhKThk');
       var elTr = hud.querySelector('#bhKTr');
       var elTe = hud.querySelector('#bhKTe');
-      var elRun = hud.querySelector('#bhRun');
       var elSlices = hud.querySelector('#bhSlices');
       var elCard = hud.querySelector('#bhCard');
       var elFind = hud.querySelector('#bhFind');
-      var elPanels = hud.querySelector('#bhPanels');
       var elLabels = hud.querySelector('#bhLabels');
 
       // 三视图
@@ -499,16 +495,6 @@
         return '<div class="bh-fr"><u>' + f[0] + '</u><span>' + f[1] + '</span><i>' + f[2] + '</i></div>';
       }).join('');
 
-      // 底部三块
-      elPanels.innerHTML = [
-        '<div class="bh-p"><h5><span>01 / SEQUENCE MAP</span><b>87 层</b></h5><canvas data-p="seq" width="520" height="140"></canvas></div>',
-        '<div class="bh-p"><h5><span>02 / SLICE PROFILE</span><b id="bhProfL">#11</b></h5><canvas data-p="prof" width="520" height="140"></canvas></div>',
-        '<div class="bh-p"><h5><span>03 / REGION MATRIX</span><b>6 × 5</b></h5><canvas data-p="mat" width="520" height="140"></canvas></div>'
-      ].join('');
-      var pcSeq = elPanels.querySelector('canvas[data-p="seq"]');
-      var pcProf = elPanels.querySelector('canvas[data-p="prof"]');
-      var pcMat = elPanels.querySelector('canvas[data-p="mat"]');
-
       /* ---------------- 三视图绘制 ---------------- */
 
       // 固定种子的伪随机：脑沟纹理每次重绘一致，不会闪
@@ -520,7 +506,7 @@
       // 灰度取值：base 是暖灰，L 为亮度 0..1
       function tone(L, a) {
         L = clamp(L, 0, 1);
-        return 'rgba(' + Math.round(236 * L) + ',' + Math.round(229 * L) + ',' + Math.round(216 * L) + ',' + a + ')';
+        return 'rgba(' + Math.round(222 * L) + ',' + Math.round(232 * L) + ',' + Math.round(242 * L) + ',' + a + ')';
       }
 
       // 脑回纹理：撒一片短弧，让切片看起来是脑而不是一个灰盘子
@@ -759,73 +745,6 @@
         drawSagittal(viewCanvases.sa.getContext('2d'), layer, t, s);
       }
 
-      /* ---------------- 底部三块 ---------------- */
-
-      function prep(c) {
-        var dpr = Math.min(2, global.devicePixelRatio || 1);
-        var w = c.clientWidth || 260, h = c.clientHeight || 52;
-        if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
-          c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
-        }
-        var x = c.getContext('2d');
-        x.setTransform(dpr, 0, 0, dpr, 0, 0);
-        x.clearRect(0, 0, w, h);
-        return { c: x, w: w, h: h };
-      }
-
-      function drawSeqMap() {
-        var o = prep(pcSeq), c = o.c, W = o.w, H = o.h;
-        var rows = [
-          ['3-pl Loc', 7, '#5a5a5a'],
-          ['Sag T1', 17, '#8a8278'],
-          ['Ax T2', 21, '#ff8a3c'],
-          ['Ax FLAIR', 21, '#b0a89c'],
-          ['Ax T1', 21, '#7a746c']
-        ];
-        var cur = { t2: 2, flair: 3, t1: 4, sag: 1 }[P.seq];
-        var rh = H / rows.length;
-        for (var i = 0; i < rows.length; i++) {
-          var y = i * rh + rh * 0.5;
-          var x0 = 62, xw = W - 78;
-          c.fillStyle = 'rgba(255,236,220,.10)';
-          c.fillRect(x0, y - 6, xw, 3);
-          c.fillStyle = i === cur ? '#ff8a3c' : 'rgba(255,236,220,.28)';
-          c.fillRect(x0, y - 6, xw * (rows[i][1] / 21), 3);
-          c.font = '8px monospace';
-          c.fillStyle = i === cur ? 'rgba(255,138,60,.95)' : 'rgba(230,226,218,.50)';
-          c.fillText(rows[i][0], 0, y + 3);
-          c.textAlign = 'right';
-          c.fillText(rows[i][1] + '', W, y + 3);
-          c.textAlign = 'left';
-        }
-      }
-
-      function drawProfile(layer) {
-        var o = prep(pcProf), c = o.c, W = o.w, H = o.h;
-        var n = 21, bw = W / n;
-        for (var i = 0; i < n; i++) {
-          // 中间层面脑组织最多，信号最强
-          var v = 0.28 + 0.62 * Math.sin(Math.PI * (i + 1) / (n + 1)) + (rnd(i * 3.7) - 0.5) * 0.10;
-          v = clamp(v, 0.05, 1);
-          var hh = v * H * 0.86;
-          c.fillStyle = (i === layer - 1) ? '#ff8a3c' : 'rgba(255,236,220,.22)';
-          c.fillRect(i * bw + bw * 0.18, H - hh, bw * 0.64, hh);
-        }
-      }
-
-      function drawMatrix(layer) {
-        var o = prep(pcMat), c = o.c, W = o.w, H = o.h;
-        var cols = 6, rows = 5, gw = W / cols, gh = H / rows;
-        for (var y = 0; y < rows; y++) {
-          for (var x = 0; x < cols; x++) {
-            var on = rnd(x * 5.1 + y * 9.3) > 0.28;
-            var hot = on && ((x + y * 2) % 7 === 3);
-            c.fillStyle = hot ? 'rgba(255,138,60,.95)' : (on ? 'rgba(255,236,220,.30)' : 'rgba(255,236,220,.07)');
-            c.fillRect(x * gw + gw * 0.22, y * gh + gh * 0.22, gw * 0.56, gh * 0.56);
-          }
-        }
-      }
-
       /* ---------------- 当前层卡片 ---------------- */
 
       function layerToMm(t) {
@@ -842,7 +761,7 @@
           '<div class="bh-row"><span>层厚 THICK / GAP</span><b>' + s.thick + ' / 1.5 mm</b></div>' +
           '<div class="bh-row"><span>TR / TE</span><b>' + s.tr + ' / ' + s.te + ' ms</b></div>' +
           '<div class="bh-row"><span>FOV / 矩阵</span><b>' + s.fov + ' · 512²</b></div>' +
-          '<div class="bh-row"><span>加权 WEIGHTING</span><b style="color:#ff8a3c">' + s.short + '</b></div>';
+          '<div class="bh-row"><span>加权 WEIGHTING</span><b style="color:#45e6f5">' + s.short + '</b></div>';
       }
 
       function renderMeta(layer, t) {
@@ -853,8 +772,6 @@
           if (mm) mm.textContent = 'mm ' + (layerToMm(t) >= 0 ? '+' : '') + layerToMm(t).toFixed(1);
           if (ly) ly.textContent = '#' + String(layer).padStart(2, '0');
         });
-        var pl = elPanels.querySelector('#bhProfL');
-        if (pl) pl.textContent = '#' + String(layer).padStart(2, '0');
         elSeq.textContent = '05';
         elLay.textContent = '87';
         elThk.innerHTML = s.thick + '<i>mm</i>';
@@ -936,9 +853,6 @@
         if (!force && layer === lastLayer) return;
         lastLayer = layer;
         drawAllViews(layer, scanT);
-        drawSeqMap();
-        drawProfile(layer);
-        drawMatrix(layer);
         renderCard(layer, scanT);
         renderMeta(layer, scanT);
       }
@@ -1056,8 +970,6 @@
           }
           dust.geometry.attributes.position.needsUpdate = true;
 
-          if (elRun) elRun.style.width = (scanT * 100).toFixed(1) + '%';
-
           refresh(false);
           updateMarks();
           tour.update(dt, tt || 0, function () { });
@@ -1070,9 +982,17 @@
         setParam: function (key, v) {
           if (key === 'tour') { tour.toggle(); return; }
           P[key] = v;
-          if (key === 'seq') { setParamSeq(v); return; }
+          if (key === 'seq') {
+            setParamSeq(v);
+            if (HL.ui && HL.ui.sync) HL.ui.sync('seq', v);
+            return;
+          }
           if (key === 'panel') { applyPanel(); return; }
-          if (key === 'scan' && !v) { P.slice = Math.round(scanT * (SEQ[P.seq].n - 1)); }
+          if (key === 'scan') {
+            scanMat.uniforms.uOp.value = v ? 0.26 : 0.0;
+            discMat.opacity = v ? 0.012 : 0.0;
+            if (!v) P.slice = Math.round(scanT * (SEQ[P.seq].n - 1));
+          }
           if (key === 'slice' && v !== undefined) scanT = clamp(v / Math.max(1, SEQ[P.seq].n - 1), 0, 1);
           refresh(true);
         },
