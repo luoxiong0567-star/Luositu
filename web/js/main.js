@@ -293,14 +293,15 @@
     massenergy: '质量—能量天平、湮灭 / 裂变 / 聚变微观动画、太阳 vs 煤球',
     gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度',
     aiagent: '12 个 AI 智能体的实时调度大屏：任务流、检索评审、成本与派发队列',
-    neuralnet: '28 项训练参数 → 多层全连接 → 8 类训练诊断：逐层点亮、信号流动、概率输出'
+    neuralnet: '28 项训练参数 → 多层全连接 → 8 类训练诊断：逐层点亮、信号流动、概率输出',
+    brain: '本人头颅 MRI 平扫的 87 层影像：扫描带推进、三视图同步、T2 / FLAIR / T1 三种加权对比'
   };
   var galleryEl;
 
   /* 场景目录 · 四章叙事结构 */
   var CHAPTERS = [
     { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'cosmos', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
-    { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 细胞 · 生命之光', ids: ['periodic', 'molecule', 'animalcell', 'photosynthesis'] },
+    { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 细胞 · 大脑', ids: ['periodic', 'molecule', 'animalcell', 'brain', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
     { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体', ids: ['neural', 'aiagent', 'neuralnet'] }
   ];
@@ -311,7 +312,7 @@
     var all = HL.allScenes();
     var total = all.length;
     var cn = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
-      '十一', '十二', '十三', '十四', '十五', '十六'][total] || ('' + total);
+      '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十'][total] || ('' + total);
     var html = '<div class="gal-head"><h2>✦ 人类之光 · 场景目录</h2>' +
       '<p>' + cn + '个三维科学可视化场景 · 点击卡片进入 · Esc 返回目录 · 作者 罗司徒</p></div>';
     var cards = [];
@@ -319,7 +320,7 @@
     // 快捷键按「注册顺序」定，卡片按「章节叙事顺序」排 —— 两者解耦，
     // 新增场景可以插进任意章节而不打乱已有快捷键。
     var regOrder = all.map(function (d) { return d.id; });
-    var KEYSEQ = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e', 't'];
+    var KEYSEQ = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e', 't', 'y', 'u'];
     function keyOfId(id) {
       var i = regOrder.indexOf(id);
       return i >= 0 ? (KEYSEQ[i] || '') : '';
@@ -455,11 +456,21 @@
 
   /* user=true 表示用户在界面上真实操作；初始化回灌记忆参数时 user 为 false，
      场景据此区分「用户明确要求」与「默认值」，避免自动性能降级被误锁死 */
+  HL.ui = HL.ui || {};
+  HL.ui.sync = function (key, value) {
+    var f = ctlSync[key];
+    if (f) { try { f(value); } catch (e) { /* 忽略 */ } }
+  };
+
   function apply(def, key, value, user) {
     if (manager.inst && manager.inst.setParam) {
       try { manager.inst.setParam(key, value, !!user); } catch (e) { console.error(e); }
     }
   }
+
+  // 控件状态回写表：场景自己改了参数（例如讲解模式里切序列）时，
+  // 让右侧面板的按钮高亮 / 滑块位置跟着走，不然 UI 和实际状态会对不上
+  var ctlSync = {};
 
   function makeRange(def, c, st) {
     var box = document.createElement('div');
@@ -476,6 +487,11 @@
       box.querySelector('.val').textContent = fmt(v) + (c.unit || '');
       apply(def, c.key, v, true);
     });
+    ctlSync[c.key] = function (v) {
+      st[c.key] = v;
+      input.value = v;
+      box.querySelector('.val').textContent = fmt(v) + (c.unit || '');
+    };
     box.appendChild(input);
     return box;
   }
@@ -491,6 +507,7 @@
       st[c.key] = cb.checked;
       apply(def, c.key, cb.checked, true);
     });
+    ctlSync[c.key] = function (v) { st[c.key] = !!v; cb.checked = !!v; };
     lab.appendChild(cb);
     lab.appendChild(document.createTextNode(c.label));
     return lab;
@@ -506,6 +523,7 @@
     var row = document.createElement('div');
     row.className = 'btn-row';
     var cur = (typeof st[c.key] !== 'undefined') ? st[c.key] : c.value;
+    var byVal = {};
     c.options.forEach(function (o) {
       var b = document.createElement('button');
       b.className = 'btn' + (o.value === cur ? ' on' : '');
@@ -516,8 +534,14 @@
         st[c.key] = o.value;
         apply(def, c.key, o.value, true);
       });
+      byVal[o.value] = b;
       row.appendChild(b);
     });
+    ctlSync[c.key] = function (v) {
+      st[c.key] = v;
+      Array.prototype.forEach.call(row.children, function (x) { x.classList.remove('on'); });
+      if (byVal[v]) byVal[v].classList.add('on');
+    };
     box.appendChild(row);
     return box;
   }

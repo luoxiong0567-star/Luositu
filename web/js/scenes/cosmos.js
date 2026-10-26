@@ -29,7 +29,7 @@
     desc: '十万颗恒星组成的旋涡星系：盘面内侧仰望银河带，退到十二万光年外看四条旋臂，再远到星系群的纤维结构',
     controls: [
       {
-        type: 'buttons', key: 'view', label: '观察位置', value: 'sky', options: [
+        type: 'buttons', key: 'view', label: '观察位置', value: 'galaxy', options: [
           { label: '仰望银河', value: 'sky' },
           { label: '星系全貌', value: 'galaxy' },
           { label: '深空', value: 'deep' }
@@ -43,7 +43,7 @@
 
     create: function (ctx) {
       var THREE = ctx.THREE, scene = ctx.scene, camera = ctx.camera, controls = ctx.controls;
-      var P = { view: 'sky', spin: true, labels: true, dust: true, glow: 1 };
+      var P = { view: 'galaxy', spin: true, labels: true, dust: true, glow: 1 };
 
       /* ---------------- 通用工具 ---------------- */
       function gauss() {
@@ -333,7 +333,7 @@
         controls.saveHome();
       }
 
-      setView('sky');
+      setView('galaxy');   // 默认进场景就看星系全貌（视角仍可切回仰望/深空）
 
       return {
         update: function (dt, t) {

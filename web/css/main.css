@@ -1586,3 +1586,152 @@ input[type=range]::-webkit-slider-thumb {
   .hm-slide, .hm-copy, .hm-outro, .hm-open { transition-duration: .01ms !important; }
   .hm-sbar i { transition: none !important; }
 }
+
+/* ============================================================
+   「人类的大脑」MRI 工作台 HUD
+   风格取自参考图：近黑底 + 极细网格 + 琥珀单色 + 等宽数字，
+   所有层次靠 1px 边框与字距拉开，不用大面积色块。
+   ============================================================ */
+.brain-hud {
+  position: absolute; inset: 0; z-index: 3;
+  pointer-events: none;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, "SF Mono", monospace;
+  color: #e6e2da;
+  font-size: 10px; letter-spacing: .14em;
+  --bh-amber: #ff8a3c;
+  --bh-amber-dim: rgba(255, 138, 60, .42);
+  --bh-line: rgba(255, 236, 220, .10);
+  --bh-line-2: rgba(255, 236, 220, .055);
+  --bh-dim: rgba(230, 226, 218, .46);
+}
+.brain-hud.off { display: none; }
+.bh-grid {
+  position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(to right, var(--bh-line-2) 0 1px, transparent 1px 88px),
+    repeating-linear-gradient(to bottom, var(--bh-line-2) 0 1px, transparent 1px 88px);
+  mask-image: radial-gradient(130% 100% at 46% 48%, #000 32%, transparent 82%);
+  -webkit-mask-image: radial-gradient(130% 100% at 46% 48%, #000 32%, transparent 82%);
+  opacity: .9;
+}
+/* 顶部标识与页签 */
+.bh-top {
+  position: absolute; left: 26px; top: 134px; right: 408px;
+  display: flex; align-items: flex-end; gap: 18px;
+  white-space: nowrap;
+}
+.bh-logo { font-size: 15px; letter-spacing: .26em; font-weight: 700; color: #f3efe6; }
+.bh-logo em { font-style: normal; color: var(--bh-amber); }
+.bh-sub { font-size: 8.5px; letter-spacing: .2em; color: var(--bh-dim); padding-bottom: 2px; }
+.bh-tabs { display: flex; gap: 14px; margin-left: auto; padding-bottom: 2px; }
+.bh-tab { color: var(--bh-dim); font-size: 9px; letter-spacing: .18em; position: relative; }
+.bh-tab.on { color: var(--bh-amber); }
+.bh-tab.on::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -5px; height: 1px;
+  background: var(--bh-amber); box-shadow: 0 0 8px var(--bh-amber-dim);
+}
+.bh-ver { color: var(--bh-dim); font-size: 9px; padding-bottom: 2px; }
+/* 大数字 */
+.bh-kpi { position: absolute; left: 26px; top: 168px; display: flex; gap: 32px; align-items: flex-end; }
+.bh-k { text-align: left; }
+.bh-k b {
+  display: block; font-size: 26px; line-height: 1; font-weight: 500;
+  color: #f4f0e6; font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.bh-k b i { font-style: normal; font-size: 11px; color: var(--bh-dim); margin-left: 2px; letter-spacing: .1em; }
+.bh-k span { display: block; margin-top: 6px; font-size: 8px; color: var(--bh-dim); letter-spacing: .16em; }
+.bh-k.hot b { color: var(--bh-amber); text-shadow: 0 0 14px rgba(255, 138, 60, .45); }
+/* 右侧三视图 */
+.bh-slices {
+  position: absolute; right: 262px; top: 134px; width: 140px; z-index: 3;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bh-sv {
+  border: 1px solid var(--bh-line); background: rgba(10, 9, 8, .52);
+  padding: 5px 6px 6px; position: relative;
+}
+.bh-sv h4 {
+  font-size: 8px; letter-spacing: .2em; color: var(--bh-dim); margin: 0 0 4px;
+  display: flex; justify-content: space-between; font-weight: 400;
+}
+.bh-sv h4 b { color: var(--bh-amber); font-weight: 400; }
+.bh-sv canvas { display: block; width: 100%; height: auto; image-rendering: auto; }
+.bh-sv .bh-meta { margin-top: 4px; font-size: 7.5px; color: var(--bh-dim); display: flex; justify-content: space-between; }
+/* 当前层橙框 */
+.bh-card {
+  z-index: 3;
+  position: absolute; right: 262px; bottom: 156px; width: 244px;
+  border: 1px solid var(--bh-amber-dim);
+  background: rgba(24, 12, 6, .5);
+  box-shadow: 0 0 24px rgba(255, 138, 60, .10), inset 0 0 22px rgba(255, 138, 60, .05);
+  padding: 7px 9px 8px;
+}
+.bh-card h5 {
+  margin: 0 0 6px; font-size: 8.5px; letter-spacing: .2em;
+  color: var(--bh-amber); font-weight: 500;
+}
+.bh-row { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; line-height: 1.8; }
+.bh-row span { color: var(--bh-dim); }
+.bh-row b { font-weight: 400; color: #f0ece2; font-variant-numeric: tabular-nums; }
+/* 左下读片结论 */
+.bh-findings {
+  position: absolute; left: 26px; bottom: 158px; width: 332px;
+  border-top: 1px solid var(--bh-line); padding-top: 7px;
+}
+.bh-findings h5 {
+  margin: 0 0 7px; font-size: 8.5px; letter-spacing: .2em; color: var(--bh-amber); font-weight: 500;
+}
+.bh-fr { display: flex; gap: 8px; font-size: 9px; line-height: 1.85; color: var(--bh-dim); }
+.bh-fr u { text-decoration: none; color: #e9e5db; min-width: 44px; }
+.bh-fr i { font-style: normal; color: var(--bh-amber); }
+/* 底部三块 */
+.bh-panels {
+  position: absolute; left: 26px; right: 262px; bottom: 62px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+}
+.bh-p { border: 1px solid var(--bh-line); background: rgba(9, 8, 7, .46); padding: 6px 8px 7px; }
+.bh-p h5 {
+  margin: 0 0 5px; font-size: 7.5px; letter-spacing: .18em; color: var(--bh-dim);
+  display: flex; justify-content: space-between; font-weight: 400;
+}
+.bh-p h5 b { color: var(--bh-amber); font-weight: 400; }
+.bh-p canvas { display: block; width: 100%; height: 66px; }
+/* 3D 锚点标签 */
+.bh-labels { position: absolute; inset: 0; overflow: visible; }
+.bh-ld { position: absolute; left: 0; top: 0; }
+.bh-ld .bh-lb {
+  position: absolute; transform: translate(-50%, -50%);
+  border: 1px solid var(--bh-line); background: rgba(8, 7, 6, .66);
+  padding: 3px 6px; white-space: nowrap; font-size: 8.5px; letter-spacing: .12em;
+  color: #efe9dd;
+}
+.bh-ld .bh-lb b { color: var(--bh-amber); font-weight: 400; margin-left: 5px; }
+.bh-ld .bh-lb i { font-style: normal; color: var(--bh-dim); margin-left: 5px; font-size: 7.5px; }
+.bh-ld svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.bh-ld line { stroke: rgba(255, 236, 220, .34); stroke-width: 1; }
+.bh-ld circle { fill: var(--bh-amber); }
+/* 扫描进度条（底部细线） */
+.bh-run {
+  position: absolute; left: 26px; right: 262px; bottom: 52px; height: 1px;
+  background: rgba(255, 236, 220, .08);
+}
+.bh-run i {
+  position: absolute; left: 0; top: 0; height: 1px; width: 0;
+  background: linear-gradient(90deg, transparent, var(--bh-amber));
+  box-shadow: 0 0 8px var(--bh-amber-dim);
+}
+/* 讲解模式下旁白卡会横穿底部，FINDINGS 与三块面板整块淡出，只留旁白 */
+.bh-findings, .bh-panels { transition: opacity .32s ease; }
+.brain-hud.tour-on .bh-findings,
+.brain-hud.tour-on .bh-panels { opacity: 0; }
+@media (max-width: 1180px) {
+  .bh-slices { display: none; }
+  .bh-card { right: 26px; }
+  .bh-top, .bh-run, .bh-panels { right: 26px; }
+}
+@media (max-width: 900px) {
+  .brain-hud .bh-kpi, .brain-hud .bh-findings, .brain-hud .bh-panels,
+  .brain-hud .bh-card, .brain-hud .bh-grid { display: none; }
+  .bh-top { right: 26px; top: 78px; }
+  .bh-tabs, .bh-ver { display: none; }
+}
