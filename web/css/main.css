@@ -1702,3 +1702,181 @@ input[type=range]::-webkit-slider-thumb {
   .brain-hud .bh-kpi, .brain-hud .bh-findings,
   .brain-hud .bh-card, .brain-hud .bh-grid { display: none; }
 }
+
+/* ============================================================
+   「硅基芯片」版图工作台 HUD
+   配色沿用「神经网络推理 / 人类的大脑」的冷青单色体系，
+   唯一暖色留给 die 间互连（#ffb454），与图例里那一格对应。
+   ============================================================ */
+.chip-hud {
+  position: absolute; inset: 0; z-index: 3;
+  pointer-events: none;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, "SF Mono", monospace;
+  color: #d8eef7;
+  font-size: 10px; letter-spacing: .14em;
+  --cp-acc: #52e8f7;
+  --cp-acc-dim: rgba(82, 232, 247, .42);
+  --cp-warm: #ffb454;
+  --cp-line: rgba(90, 180, 220, .20);
+  --cp-line-2: rgba(90, 180, 220, .065);
+  --cp-dim: rgba(159, 196, 216, .58);
+}
+.chip-hud.off { display: none; }
+.cp-grid {
+  position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(to right, var(--cp-line-2) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(to bottom, var(--cp-line-2) 0 1px, transparent 1px 96px);
+  mask-image: radial-gradient(128% 100% at 50% 50%, #000 34%, transparent 84%);
+  -webkit-mask-image: radial-gradient(128% 100% at 50% 50%, #000 34%, transparent 84%);
+  opacity: .9; transform-origin: 50% 52%;
+}
+/* 下钻时网格轻微「推近」，给视角切换一个视觉落点 */
+.chip-hud.zoom .cp-grid { animation: cpZoom .86s cubic-bezier(.22, .8, .3, 1); }
+@keyframes cpZoom { from { transform: scale(1.055); opacity: .35; } to { transform: scale(1); opacity: .9; } }
+
+/* 顶部标识 */
+.cp-top {
+  position: absolute; left: 26px; top: 134px; right: 408px;
+  display: flex; align-items: flex-end; gap: 18px; white-space: nowrap;
+}
+.cp-logo { font-size: 15px; letter-spacing: .26em; font-weight: 700; }
+.cp-logo em { font-style: normal; color: var(--cp-acc); }
+.cp-sub { font-size: 8.5px; letter-spacing: .2em; color: var(--cp-dim); padding-bottom: 2px; }
+
+/* 大数字 */
+.cp-kpi { position: absolute; left: 26px; top: 170px; display: flex; gap: 30px; align-items: flex-end; }
+.cp-k b {
+  display: block; font-size: 25px; line-height: 1; font-weight: 500;
+  color: #d8eef7; font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.cp-k b i { font-style: normal; font-size: 10.5px; color: var(--cp-dim); margin-left: 2px; letter-spacing: .1em; }
+.cp-k span { display: block; margin-top: 6px; font-size: 8px; color: var(--cp-dim); letter-spacing: .16em; }
+.cp-k.hot b { color: var(--cp-acc); text-shadow: 0 0 14px rgba(82, 232, 247, .40); }
+
+/* 右上：版图小地图 */
+.cp-map {
+  position: absolute; right: 262px; top: 134px; width: 152px; z-index: 3;
+  border: 1px solid var(--cp-line); background: rgba(7, 18, 32, .72);
+  padding: 5px 6px 6px;
+}
+.cp-map h4 {
+  margin: 0 0 4px; font-size: 8px; letter-spacing: .2em; color: var(--cp-dim);
+  display: flex; justify-content: space-between; font-weight: 400;
+}
+.cp-map h4 b { color: var(--cp-acc); font-weight: 400; }
+.cp-map canvas { display: block; width: 100%; height: auto; }
+.cp-map-ft {
+  margin-top: 4px; font-size: 7.5px; color: var(--cp-dim);
+  display: flex; justify-content: space-between; letter-spacing: .12em;
+}
+
+/* 视角快切：竖排在版图面板下面 */
+.cp-toggle {
+  position: absolute; right: 262px; top: 300px; width: 152px; z-index: 3;
+  display: flex; flex-direction: column; gap: 6px;
+  pointer-events: auto;
+}
+.cp-toggle button {
+  height: 26px; font-family: inherit; font-size: 9px; letter-spacing: .16em;
+  color: var(--cp-dim); background: rgba(8, 20, 34, .78);
+  border: 1px solid var(--cp-line); cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.cp-toggle button:hover { color: #d8eef7; border-color: var(--cp-acc-dim); }
+.cp-toggle button.on {
+  color: #061018; background: var(--cp-acc); border-color: var(--cp-acc);
+  box-shadow: 0 0 16px rgba(82, 232, 247, .30); font-weight: 600;
+}
+
+/* 操作提示：贴在 KPI 下面当图注 */
+.cp-hint {
+  position: absolute; left: 26px; top: 224px; font-size: 8.5px;
+  letter-spacing: .13em; color: var(--cp-dim);
+}
+.cp-hint::before { content: '› '; color: var(--cp-acc); }
+
+/* 左下：功能区块图例 */
+.cp-legend {
+  position: absolute; left: 26px; bottom: 56px; width: 334px;
+  border-top: 1px solid var(--cp-line); padding-top: 7px;
+  transition: opacity .32s ease;
+}
+.cp-legend h5 {
+  margin: 0 0 6px; font-size: 8.5px; letter-spacing: .2em;
+  color: var(--cp-acc); font-weight: 500;
+}
+.cp-lg { display: flex; align-items: center; gap: 8px; font-size: 9px; line-height: 1.85; color: var(--cp-dim); }
+.cp-lg i { width: 8px; height: 8px; flex: none; box-shadow: 0 0 8px currentColor; }
+.cp-lg span { flex: 1; color: #cfe6f2; }
+.cp-lg b { font-weight: 400; color: var(--cp-dim); font-variant-numeric: tabular-nums; }
+.cp-note {
+  margin-top: 6px; font-size: 7.5px; color: rgba(159, 196, 216, .40);
+  letter-spacing: .1em; line-height: 1.6;
+}
+
+/* 右下：当前视图参数卡 */
+.cp-card {
+  position: absolute; right: 262px; bottom: 56px; width: 244px; z-index: 3;
+  border: 1px solid var(--cp-acc-dim); background: rgba(6, 20, 34, .62);
+  box-shadow: 0 0 24px rgba(82, 232, 247, .10), inset 0 0 22px rgba(82, 232, 247, .05);
+  padding: 7px 9px 8px; pointer-events: auto;
+  transition: opacity .32s ease;
+}
+.cp-card h5 {
+  margin: 0 0 6px; font-size: 8.5px; letter-spacing: .2em;
+  color: var(--cp-acc); font-weight: 500;
+}
+.cp-row { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; line-height: 1.8; }
+.cp-row span { color: var(--cp-dim); flex: none; }
+.cp-row b { font-weight: 400; color: #d8eef7; text-align: right; font-variant-numeric: tabular-nums; }
+.cp-desc {
+  margin-top: 4px; font-size: 8.5px; line-height: 1.7;
+  color: var(--cp-dim); letter-spacing: .08em;
+}
+.cp-back {
+  margin-top: 7px; width: 100%; height: 24px;
+  font-family: inherit; font-size: 8.5px; letter-spacing: .16em;
+  color: var(--cp-acc); background: rgba(82, 232, 247, .07);
+  border: 1px solid var(--cp-acc-dim); cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.cp-back:hover { background: rgba(82, 232, 247, .18); color: #eafcff; }
+
+/* 3D 锚点标签 */
+.cp-labels { position: absolute; inset: 0; overflow: visible; }
+.cp-ld { position: absolute; left: 0; top: 0; }
+.cp-ld .cp-lb {
+  position: absolute; transform: translate(-50%, -50%);
+  border: 1px solid var(--cp-line); background: rgba(4, 12, 22, .78);
+  padding: 3px 6px; white-space: nowrap; font-size: 8.5px; letter-spacing: .12em;
+}
+.cp-ld .cp-lb b { color: var(--cp-acc); font-weight: 400; margin-left: 5px; }
+.cp-ld svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.cp-ld line { stroke: rgba(90, 180, 220, .5); stroke-width: 1; }
+.cp-ld circle { fill: var(--cp-acc); }
+
+/* 视角切换的整屏闪白：一次很短的过曝，模拟「换焦」 */
+.cp-flash {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(60% 60% at 50% 50%, rgba(180, 245, 255, .30), transparent 72%);
+}
+.cp-flash.on { animation: cpFlash .46s ease-out; }
+@keyframes cpFlash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 讲解模式下旁白卡横穿底部，左右两块面板一起淡出 */
+.chip-hud.tour-on .cp-legend,
+.chip-hud.tour-on .cp-card,
+.chip-hud.tour-on .cp-toggle,
+.chip-hud.tour-on .cp-hint { opacity: 0; }
+.chip-hud.tour-on .cp-toggle { pointer-events: none; }
+
+@media (max-width: 1180px) {
+  .cp-map, .cp-toggle { display: none; }
+  .cp-top { right: 26px; }
+}
+@media (max-width: 900px) {
+  .chip-hud .cp-kpi, .chip-hud .cp-legend,
+  .chip-hud .cp-card, .chip-hud .cp-hint,
+  .chip-hud .cp-grid { display: none; }
+}

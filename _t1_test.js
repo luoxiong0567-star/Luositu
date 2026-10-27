@@ -11,7 +11,7 @@ const URL_BASE = 'file:///C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-ligh
 
 // 12 个 3D 场景（registration 顺序；aiagent 为内嵌页面，不参与讲解模式回归）
 const SCENES = ['solar', 'periodic', 'neural', 'math', 'interference', 'molecule',
-  'animalcell', 'brain', 'fourier', 'emwave', 'photosynthesis', 'maxwell', 'massenergy', 'gravity'];
+  'animalcell', 'brain', 'chip', 'fourier', 'emwave', 'photosynthesis', 'maxwell', 'massenergy', 'gravity'];
 
 function httpReq(url, method) {
   return new Promise((res, rej) => {
@@ -77,7 +77,7 @@ function httpReq(url, method) {
     return { evalx, shot, close: async () => { try { ws.close(); } catch (e) {} await httpReq('http://127.0.0.1:' + PORT + '/json/close/' + t.id).catch(() => {}); }, errors };
   }
 
-  /* ---------- A. 14 场景讲解模式（含动物细胞、人类的大脑） ---------- */
+  /* ---------- A. 15 场景讲解模式（含动物细胞、人类的大脑、硅基芯片） ---------- */
   for (const sc of SCENES) {
     const r = await open(URL_BASE + '?_t=' + Date.now() + '#' + sc, sc === 'photosynthesis' || sc === 'massenergy' ? 5000 : 4200);
     const v = await r.evalx(`(function(){
@@ -132,14 +132,14 @@ function httpReq(url, method) {
         foot: g ? (g.querySelector('.gal-foot')||{}).textContent || '' : ''
       });
     })()`) || {};
-    const ok = v.show && v.chapters === 0 && v.cards === 17 && v.imgs >= 17 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
+    const ok = v.show && v.chapters === 0 && v.cards === 18 && v.imgs >= 18 && /宇宙用数学写就/.test(v.foot || '') && !r.errors.length;
     if (!ok) bad++;
     log('── 目录页平铺       ' + (ok ? 'PASS' : 'FAIL') + '  分组标题=' + v.chapters + ' cards=' + v.cards + ' imgs=' + v.imgs +
       ' [' + (v.chNames || []).join(' | ') + ']' + (r.errors.length ? ' !! ' + r.errors[0] : ''));
     await r.close();
   }
 
-  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ 全量回归 14/14 通过');
+  log(bad ? '\n❌ ' + bad + ' 项失败' : '\n✅ 全量回归 ' + (SCENES.length + 1) + '/' + (SCENES.length + 1) + ' 通过');
   fs.writeFileSync(path.join(ROOT, '_t1_out.txt'), LOG.join('\n'), 'utf8');
   try { child.kill(); } catch (e) {}
   process.exit(0);

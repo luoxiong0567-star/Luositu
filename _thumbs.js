@@ -29,6 +29,7 @@ const SHOTS = [
   { id: 'molecule', q: '' },
   { id: 'animalcell', q: '' },
   { id: 'brain', q: '' },
+  { id: 'chip', q: '' },
   { id: 'fourier', q: '' },
   { id: 'emwave', q: '' },
   { id: 'photosynthesis', q: '?level=mol' },

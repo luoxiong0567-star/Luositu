@@ -294,7 +294,8 @@
     gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度',
     aiagent: '12 个 AI 智能体的实时调度大屏：任务流、检索评审、成本与派发队列',
     neuralnet: '28 项训练参数 → 多层全连接 → 8 类训练诊断：逐层点亮、信号流动、概率输出',
-    brain: '本人头颅 MRI 平扫的 87 层影像：扫描带推进、三视图同步、T2 / FLAIR / T1 三种加权对比'
+    brain: '本人头颅 MRI 平扫的 87 层影像：扫描带推进、三视图同步、T2 / FLAIR / T1 三种加权对比',
+    chip: 'Blackwell B200 与 EPYC 9965 并置：宏观封装版图，点区块下钻到 SM / Zen 5c 核心内部'
   };
   var galleryEl;
 
@@ -303,7 +304,7 @@
     { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'cosmos', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
     { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 细胞 · 大脑', ids: ['periodic', 'molecule', 'animalcell', 'brain', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
-    { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体', ids: ['neural', 'aiagent', 'neuralnet'] }
+    { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体 · 硅基算力', ids: ['neural', 'aiagent', 'neuralnet', 'chip'] }
   ];
 
   function buildGallery() {
