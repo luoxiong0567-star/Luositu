@@ -1704,9 +1704,9 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 /* ============================================================
-   「硅基芯片」版图工作台 HUD
+   「硅基芯片」立体剖面台 HUD
    配色沿用「神经网络推理 / 人类的大脑」的冷青单色体系，
-   唯一暖色留给 die 间互连（#ffb454），与图例里那一格对应。
+   唯一暖色留给 die 间互连与 3D 堆叠（#ffb454），与图例里那一格对应。
    ============================================================ */
 .chip-hud {
   position: absolute; inset: 0; z-index: 3;
@@ -1754,26 +1754,59 @@ input[type=range]::-webkit-slider-thumb {
 .cp-k span { display: block; margin-top: 6px; font-size: 8px; color: var(--cp-dim); letter-spacing: .16em; }
 .cp-k.hot b { color: var(--cp-acc); text-shadow: 0 0 14px rgba(82, 232, 247, .40); }
 
-/* 右上：版图小地图 */
-.cp-map {
+/* 操作提示：贴在 KPI 下面当图注 */
+.cp-hint {
+  position: absolute; left: 26px; top: 224px; font-size: 8.5px;
+  letter-spacing: .13em; color: var(--cp-dim);
+}
+.cp-hint::before { content: '\203A '; color: var(--cp-acc); }
+
+/* 左下：层叠结构清单（可点击聚焦单层） */
+.cp-stack {
+  position: absolute; left: 26px; bottom: 56px; width: 348px;
+  border-top: 1px solid var(--cp-line); padding-top: 8px;
+  pointer-events: auto; transition: opacity .32s ease;
+}
+.cp-stack h5 {
+  margin: 0 0 6px; font-size: 8.5px; letter-spacing: .2em;
+  color: var(--cp-acc); font-weight: 500;
+  display: flex; justify-content: space-between;
+}
+.cp-stack h5 b { font-weight: 400; color: var(--cp-dim); }
+.cp-l {
+  display: flex; align-items: baseline; gap: 9px; width: 100%;
+  font-family: inherit; font-size: 9.5px; letter-spacing: .1em;
+  color: var(--cp-dim); background: none; border: 0;
+  border-left: 1px solid transparent; padding: 3px 0 3px 7px;
+  cursor: pointer; text-align: left; line-height: 1.35;
+  transition: color .18s, border-color .18s, background .18s;
+}
+.cp-l:hover { color: #d8eef7; border-left-color: var(--cp-acc-dim); background: rgba(82, 232, 247, .05); }
+.cp-l.on { color: var(--cp-acc); border-left-color: var(--cp-acc); background: rgba(82, 232, 247, .08); }
+.cp-li { font-size: 8px; opacity: .7; flex: none; }
+.cp-ln { flex: none; color: #cfe6f2; }
+.cp-l.on .cp-ln { color: var(--cp-acc); }
+.cp-le {
+  font-size: 7.5px; opacity: .62; flex: 1; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* 右上：侧视剖面小图 */
+.cp-xsec {
   position: absolute; right: 262px; top: 134px; width: 152px; z-index: 3;
-  border: 1px solid var(--cp-line); background: rgba(7, 18, 32, .72);
+  border: 1px solid var(--cp-line); background: rgba(6, 17, 30, .68);
   padding: 5px 6px 6px;
 }
-.cp-map h4 {
+.cp-xsec h4 {
   margin: 0 0 4px; font-size: 8px; letter-spacing: .2em; color: var(--cp-dim);
   display: flex; justify-content: space-between; font-weight: 400;
 }
-.cp-map h4 b { color: var(--cp-acc); font-weight: 400; }
-.cp-map canvas { display: block; width: 100%; height: auto; }
-.cp-map-ft {
-  margin-top: 4px; font-size: 7.5px; color: var(--cp-dim);
-  display: flex; justify-content: space-between; letter-spacing: .12em;
-}
+.cp-xsec h4 b { color: var(--cp-acc); font-weight: 400; }
+.cp-xsec canvas { display: block; width: 152px; height: 140px; }
 
-/* 视角快切：竖排在版图面板下面 */
+/* 视角快切：竖排在剖面图下面 */
 .cp-toggle {
-  position: absolute; right: 262px; top: 300px; width: 152px; z-index: 3;
+  position: absolute; right: 262px; top: 330px; width: 152px; z-index: 3;
   display: flex; flex-direction: column; gap: 6px;
   pointer-events: auto;
 }
@@ -1789,33 +1822,7 @@ input[type=range]::-webkit-slider-thumb {
   box-shadow: 0 0 16px rgba(82, 232, 247, .30); font-weight: 600;
 }
 
-/* 操作提示：贴在 KPI 下面当图注 */
-.cp-hint {
-  position: absolute; left: 26px; top: 224px; font-size: 8.5px;
-  letter-spacing: .13em; color: var(--cp-dim);
-}
-.cp-hint::before { content: '› '; color: var(--cp-acc); }
-
-/* 左下：功能区块图例 */
-.cp-legend {
-  position: absolute; left: 26px; bottom: 56px; width: 334px;
-  border-top: 1px solid var(--cp-line); padding-top: 7px;
-  transition: opacity .32s ease;
-}
-.cp-legend h5 {
-  margin: 0 0 6px; font-size: 8.5px; letter-spacing: .2em;
-  color: var(--cp-acc); font-weight: 500;
-}
-.cp-lg { display: flex; align-items: center; gap: 8px; font-size: 9px; line-height: 1.85; color: var(--cp-dim); }
-.cp-lg i { width: 8px; height: 8px; flex: none; box-shadow: 0 0 8px currentColor; }
-.cp-lg span { flex: 1; color: #cfe6f2; }
-.cp-lg b { font-weight: 400; color: var(--cp-dim); font-variant-numeric: tabular-nums; }
-.cp-note {
-  margin-top: 6px; font-size: 7.5px; color: rgba(159, 196, 216, .40);
-  letter-spacing: .1em; line-height: 1.6;
-}
-
-/* 右下：当前视图参数卡 */
+/* 右下：图例 + 参数卡 */
 .cp-card {
   position: absolute; right: 262px; bottom: 56px; width: 244px; z-index: 3;
   border: 1px solid var(--cp-acc-dim); background: rgba(6, 20, 34, .62);
@@ -1827,13 +1834,20 @@ input[type=range]::-webkit-slider-thumb {
   margin: 0 0 6px; font-size: 8.5px; letter-spacing: .2em;
   color: var(--cp-acc); font-weight: 500;
 }
-.cp-row { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; line-height: 1.8; }
-.cp-row span { color: var(--cp-dim); flex: none; }
-.cp-row b { font-weight: 400; color: #d8eef7; text-align: right; font-variant-numeric: tabular-nums; }
+.cp-lg { display: flex; align-items: center; gap: 8px; font-size: 9px; line-height: 1.85; color: var(--cp-dim); }
+.cp-lg i { width: 8px; height: 8px; flex: none; box-shadow: 0 0 8px currentColor; }
+.cp-lg span { flex: 1; color: #cfe6f2; }
+.cp-lg b { font-weight: 400; color: var(--cp-dim); font-variant-numeric: tabular-nums; }
 .cp-desc {
-  margin-top: 4px; font-size: 8.5px; line-height: 1.7;
-  color: var(--cp-dim); letter-spacing: .08em;
+  margin-top: 6px; font-size: 8px; line-height: 1.75;
+  color: rgba(159, 196, 216, .62); letter-spacing: .08em;
 }
+.cp-focus {
+  margin-top: 7px; padding: 5px 7px; font-size: 8px; line-height: 1.7;
+  border-left: 2px solid var(--cp-acc); background: rgba(82, 232, 247, .07);
+  color: rgba(159, 196, 216, .72); letter-spacing: .08em;
+}
+.cp-focus b { display: block; color: var(--cp-acc); font-weight: 500; margin-bottom: 2px; letter-spacing: .12em; }
 .cp-back {
   margin-top: 7px; width: 100%; height: 24px;
   font-family: inherit; font-size: 8.5px; letter-spacing: .16em;
@@ -1845,10 +1859,10 @@ input[type=range]::-webkit-slider-thumb {
 
 /* 3D 锚点标签 */
 .cp-labels { position: absolute; inset: 0; overflow: visible; }
-.cp-ld { position: absolute; left: 0; top: 0; }
+.cp-ld { position: absolute; left: 0; top: 0; will-change: transform; }
 .cp-ld .cp-lb {
-  position: absolute; transform: translate(-50%, -50%);
-  border: 1px solid var(--cp-line); background: rgba(4, 12, 22, .78);
+  position: absolute; left: 30px; top: -42px;
+  border: 1px solid var(--cp-line); background: rgba(4, 12, 22, .82);
   padding: 3px 6px; white-space: nowrap; font-size: 8.5px; letter-spacing: .12em;
 }
 .cp-ld .cp-lb b { color: var(--cp-acc); font-weight: 400; margin-left: 5px; }
@@ -1865,18 +1879,30 @@ input[type=range]::-webkit-slider-thumb {
 @keyframes cpFlash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
 
 /* 讲解模式下旁白卡横穿底部，左右两块面板一起淡出 */
-.chip-hud.tour-on .cp-legend,
+.chip-hud.tour-on .cp-stack,
 .chip-hud.tour-on .cp-card,
 .chip-hud.tour-on .cp-toggle,
 .chip-hud.tour-on .cp-hint { opacity: 0; }
 .chip-hud.tour-on .cp-toggle { pointer-events: none; }
 
 @media (max-width: 1180px) {
-  .cp-map, .cp-toggle { display: none; }
+  .cp-xsec { display: none; }
   .cp-top { right: 26px; }
+  .cp-toggle { top: 210px; }
 }
 @media (max-width: 900px) {
   .chip-hud .cp-kpi, .chip-hud .cp-legend,
   .chip-hud .cp-card, .chip-hud .cp-hint,
-  .chip-hud .cp-grid { display: none; }
+  .chip-hud .cp-stack, .chip-hud .cp-grid,
+  .chip-hud .cp-labels { display: none; }
+  .chip-hud .cp-top { top: 96px; left: 18px; right: 18px; }
+  .chip-hud .cp-logo { font-size: 12px; }
+  .chip-hud .cp-sub { font-size: 7.5px; }
+  /* 窄屏：视角快切改为贴底横排，拇指够得到 */
+  .chip-hud .cp-toggle {
+    top: auto; right: auto; left: 50%; bottom: 18px;
+    width: auto; transform: translateX(-50%);
+    flex-direction: row; gap: 8px;
+  }
+  .chip-hud .cp-toggle button { height: 32px; padding: 0 14px; font-size: 10px; }
 }
