@@ -1,4 +1,4 @@
-// 「硅基芯片」立体剖面台 v2 专项验证：宏观堆叠 / 微观下钻 / 芯片切换 / 聚焦 / 讲解模式 / 移动端
+// 「硅基芯片 · GB300 托盘」专项验证：渲染 / 点击拆解 / 详情 / 复位 / 讲解 / 移动端
 const { execFile } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -6,7 +6,7 @@ const path = require('path');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const ROOT = 'C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light';
-const PORT = 9471 + Math.floor(Math.random() * 60);
+const PORT = 9511 + Math.floor(Math.random() * 60);
 const BASE = 'file:///C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light/web/index.html';
 
 function httpReq(url, method) {
@@ -17,12 +17,13 @@ function httpReq(url, method) {
     req.on('error', rej); req.end();
   });
 }
+const wait = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
   const child = execFile(EDGE, [
     '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=swiftshader',
     '--no-first-run', '--disable-features=msEdgeNewTabPage',
-    '--user-data-dir=' + path.join(ROOT, '_edge_chip'),
+    '--user-data-dir=' + path.join(ROOT, '_edge_chip2'),
     '--window-size=1440,900', '--hide-scrollbars', '--allow-file-access-from-files',
     '--remote-debugging-port=' + PORT, 'about:blank'
   ], () => {});
@@ -30,14 +31,12 @@ function httpReq(url, method) {
 
   let tabs = null;
   for (let i = 0; i < 60; i++) {
-    await new Promise(r => setTimeout(r, 250));
+    await wait(250);
     try { tabs = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/list')); if (tabs && tabs.length) break; } catch (e) {}
   }
   if (!tabs || !tabs.length) { console.log('ERR: CDP not ready'); child.kill(); process.exit(1); }
 
   let bad = 0;
-  const wait = ms => new Promise(r => setTimeout(r, ms));
-
   function mkTab(t) {
     let mid = 0; const pend = {}; const errors = [];
     const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -54,8 +53,7 @@ function httpReq(url, method) {
       ws.send(JSON.stringify({ id: i, method, params: params || {} }));
     });
     return {
-      errors,
-      send,
+      errors, send,
       async open(url, waitMs) {
         await new Promise(r => { if (ws.readyState === 1) r(); else ws.onopen = r; });
         await send('Page.enable'); await send('Runtime.enable');
@@ -77,160 +75,157 @@ function httpReq(url, method) {
     };
   }
 
-  async function newTab() {
-    const t = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/new?' + encodeURIComponent('about:blank'), 'PUT'));
-    return mkTab(t);
-  }
-
   const PROBE = `(function(){
-    var m = window.HL && HL.manager, inst = m && m.inst, r = m && m.renderer;
-    var out = { hud: !!document.querySelector('.chip-hud'),
-      stack: document.querySelectorAll('.cp-stack .cp-l').length,
-      kpi: document.querySelectorAll('.cp-kpi .cp-k').length,
-      legend: document.querySelectorAll('.cp-card .cp-lg').length,
-      xsec: !!document.getElementById('cpXsec'),
-      toggle: document.querySelectorAll('.cp-toggle button').length,
-      labels: Array.prototype.filter.call(document.querySelectorAll('.cp-ld'), function(e){return e.style.display!=='none';}).length,
-      calls: r ? r.info.render.calls : -1, tris: r ? r.info.render.triangles : -1,
-      nan: m && m.camera ? !(isFinite(m.camera.position.x)&&isFinite(m.camera.position.y)&&isFinite(m.camera.position.z)) : true,
-      hint: (document.getElementById('cpHint')||{}).textContent||'' };
-    return JSON.stringify(out);
+    var m = HL.manager, inst = m && m.inst, s = inst && inst._chipState ? inst._chipState() : null;
+    var card = document.getElementById('ckCard');
+    return JSON.stringify({
+      hud: !!document.querySelector('.chip-hud'),
+      rows: document.querySelectorAll('.ck-row').length,
+      kpi: document.querySelectorAll('.ck-k').length,
+      tags: document.querySelectorAll('.ck-tag').length,
+      cardName: card ? ((card.querySelector('.ck-name')||{}).textContent || '') : '',
+      cardText: card ? card.textContent.replace(/\\s+/g,' ').slice(0,120) : '',
+      selected: s ? s.sel : null,
+      explodeAll: s ? s.explodeAll : null,
+      t: s ? s.t : [],
+      calls: s ? s.calls : -1, tris: s ? s.tris : -1,
+      nan: s ? s.nan : true,
+      inspect: !!(document.querySelector('.chip-hud')||{}).classList &&
+               document.querySelector('.chip-hud').classList.contains('inspect')
+    });
   })()`;
 
-  /* ============ A. 桌面 1440x900 ============ */
+  async function newTab(url) {
+    const t = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/new?' + encodeURIComponent(url), 'PUT'));
+    return { tab: t, r: mkTab(t) };
+  }
+
+  /* ============ A. 桌面 ============ */
   {
-    const r = await newTab();
-    await r.open(BASE + '?_t=' + Date.now() + '#chip', 5200);
+    const nt = await newTab('about:blank');
+    const r = nt.r;
+    await r.open(BASE + '?_t=' + Date.now() + '#chip', 5600);
 
-    /* A1. 宏观 GPU 默认态 */
     const v = await r.evalx(PROBE) || {};
-    const okA = v.hud && v.stack === 5 && v.kpi === 5 && v.legend === 5 && v.toggle === 2 &&
-      v.xsec && v.calls > 0 && v.tris > 1000 && !v.nan && !r.errors.length;
-    if (!okA) bad++;
-    console.log('── 宏观 GPU 默认    ' + (okA ? 'PASS' : 'FAIL') +
-      '  层=' + v.stack + ' KPI=' + v.kpi + ' 图例=' + v.legend + ' 快切=' + v.toggle +
-      ' draw=' + v.calls + ' tri=' + v.tris + ' 标注=' + v.labels +
-      (r.errors.length ? '  !! ' + r.errors[0] : ''));
+    const ok = v.hud && v.rows === 7 && v.tags === 6 &&
+      v.calls > 20 && v.tris > 3000 && !v.nan && !r.errors.length;
+    if (!ok) bad++;
+    console.log('── 默认整机        ' + (ok ? 'PASS' : 'FAIL') +
+      '  清单=' + v.rows + ' 标注=' + v.tags +
+      ' draw=' + v.calls + ' tri=' + v.tris + (r.errors.length ? '  !! ' + r.errors[0] : ''));
+    await r.shot('chip2-default.png');
 
-    /* A2. 层间距拉满 */
-    await r.evalx('HL.manager.inst.setParam("explode", 1)'); await wait(1300);
+    /* 点击左侧 GPU（清单第 1 行） */
+    await r.evalx('document.querySelectorAll(".ck-row")[0].click()');
+    await wait(1800);
+    const v1 = await r.evalx(PROBE) || {};
+    const ok1 = v1.selected === 'ga' && v1.t[0] > 0.55 && v1.t[1] < 0.2 &&
+      /Blackwell/.test(v1.cardName) && v1.inspect && !r.errors.length;
+    if (!ok1) bad++;
+    console.log('── 点击 GPU 拆解   ' + (ok1 ? 'PASS' : 'FAIL') +
+      '  sel=' + v1.selected + ' t0=' + v1.t[0] + ' t1=' + v1.t[1] +
+      ' 卡="' + v1.cardName + '" draw=' + v1.calls);
+    await r.shot('chip2-gpu.png');
+
+    /* 点击 CPU */
+    await r.evalx('document.querySelectorAll(".ck-row")[2].click()');
+    await wait(1900);
     const v2 = await r.evalx(PROBE) || {};
-    if (!v2.calls || v2.nan || r.errors.length) bad++;
-    console.log('   层间距 100%      draw=' + v2.calls + ' tri=' + v2.tris +
-      (r.errors.length ? ' !! ' + r.errors[0] : ' PASS'));
-    await r.shot('chip-macro-gpu.png');
+    const ok2 = v2.selected === 'cpu' && v2.t[2] > 0.5 && v2.t[0] < 0.15 &&
+      /Grace/.test(v2.cardName) && v2.cardText.length > 40 && !r.errors.length;
+    if (!ok2) bad++;
+    console.log('── 点击 CPU 拆解   ' + (ok2 ? 'PASS' : 'FAIL') +
+      '  t_cpu=' + v2.t[2] + ' t_gpu=' + v2.t[0] + ' 卡文本=' + v2.cardText.length + '字');
+    await r.shot('chip2-cpu.png');
 
-    /* A3. 点击层叠结构第 3 行（硅中介层）聚焦 */
-    await r.evalx('document.querySelectorAll(".cp-stack .cp-l")[2].click()'); await wait(1500);
-    const vf = await r.evalx(PROBE) || {};
-    const vfOn = await r.evalx(`(function(){ return JSON.stringify({
-      on: !!document.querySelector('.cp-stack .cp-l.on'),
-      focus: !!document.querySelector('.cp-focus') }); })()`) || {};
-    const okF = vf.calls > 0 && !vf.nan && !r.errors.length && vfOn.on && vfOn.focus;
-    if (!okF) bad++;
-    console.log('   聚焦中介层       ' + (okF ? 'PASS' : 'FAIL') + '  draw=' + vf.calls);
-    await r.shot('chip-focus-interposer.png');
-    await r.evalx('document.querySelectorAll(".cp-stack .cp-l")[2].click()'); await wait(1200);
+    /* 全部拆解 */
+    await r.evalx('HL.manager.inst.setParam("explodeAll")');
+    await wait(3200);
+    const v3 = await r.evalx(PROBE) || {};
+    const ok3 = v3.explodeAll === true && v3.t.every(x => x > 0.6) && !r.errors.length;
+    if (!ok3) bad++;
+    console.log('── 全部拆解        ' + (ok3 ? 'PASS' : 'FAIL') + '  t=' + JSON.stringify(v3.t));
+    await r.shot('chip2-all.png');
 
-    /* A4. 切微观 GPU（SM 单元） */
-    await r.evalx('HL.manager.inst.setParam("view","micro")'); await wait(1700);
+    /* 复位 */
+    await r.evalx('HL.manager.inst.setParam("resetView")');
+    await wait(1700);
     const v4 = await r.evalx(PROBE) || {};
-    const okM = v4.stack === 5 && v4.legend === 5 && !v4.nan && !r.errors.length;
-    if (!okM) bad++;
-    console.log('── 微观 SM 单元     ' + (okM ? 'PASS' : 'FAIL') + '  层=' + v4.stack +
-      ' 图例=' + v4.legend + ' draw=' + v4.calls + ' tri=' + v4.tris);
-    await r.shot('chip-micro-sm.png');
+    const ok4 = v4.explodeAll === false && v4.selected === null && v4.t.every(x => x < 0.15) &&
+      !v4.inspect && !r.errors.length;
+    if (!ok4) bad++;
+    console.log('── 复位            ' + (ok4 ? 'PASS' : 'FAIL') + '  t=' + JSON.stringify(v4.t));
 
-    /* A5. 回宏观 → 切 CPU */
-    await r.evalx('HL.manager.inst.setParam("view","macro")'); await wait(1500);
-    await r.evalx('HL.manager.inst.setParam("chip","cpu")'); await wait(1900);
-    const v5 = await r.evalx(PROBE) || {};
-    const okC = v5.stack === 4 && v5.kpi === 5 && !v5.nan && !r.errors.length;
-    if (!okC) bad++;
-    console.log('── CPU chiplet 宏观 ' + (okC ? 'PASS' : 'FAIL') + '  层=' + v5.stack +
-      ' KPI=' + v5.kpi + ' draw=' + v5.calls + ' tri=' + v5.tris);
-    await r.shot('chip-macro-cpu.png');
-
-    /* A6. CPU 微观（Zen 5c） */
-    await r.evalx('HL.manager.inst.setParam("view","micro")'); await wait(1700);
-    const v6 = await r.evalx(PROBE) || {};
-    const okC2 = v6.stack === 5 && !v6.nan && !r.errors.length;
-    if (!okC2) bad++;
-    console.log('── CPU Zen5c 微观   ' + (okC2 ? 'PASS' : 'FAIL') + '  层=' + v6.stack + ' draw=' + v6.calls);
-    await r.shot('chip-micro-core.png');
-
-    /* A7. 讲解模式走 3 步 */
-    await r.evalx('HL.manager.inst.setParam("view","macro")'); await wait(1500);
+    /* 讲解模式走 3 步 */
     const tv = await r.evalx(`(function(){
-      var inst = HL.manager.inst; inst.setParam('tour');
+      HL.manager.inst.setParam('tour');
       var ui = document.getElementById('hlTour');
       var out = { shown: !!(ui && ui.classList.contains('show')),
         t1: ui ? (ui.querySelector('.gt-title')||{}).textContent : '',
         s1: ui ? (ui.querySelector('.gt-step')||{}).textContent : '' };
       var nx = ui && ui.querySelector('.gt-next');
-      for (var i = 0; i < 3 && nx; i++) nx.click();
+      for (var i = 0; i < 2 && nx; i++) nx.click();
       out.t2 = ui ? (ui.querySelector('.gt-title')||{}).textContent : '';
+      out.step = ui ? (ui.querySelector('.gt-step')||{}).textContent : '';
       var ex = ui && ui.querySelector('.gt-exit'); if (ex) ex.click();
       out.after = !!(ui && ui.classList.contains('show'));
       return JSON.stringify(out);
     })()`) || {};
-    const okT = tv.shown && tv.s1 && tv.t2 !== tv.t1 && !tv.after && !r.errors.length;
-    if (!okT) bad++;
-    console.log('── 讲解模式         ' + (okT ? 'PASS' : 'FAIL') +
-      '  1st="' + (tv.t1 || '').slice(0, 24) + '" → "' + (tv.t2 || '').slice(0, 24) + '"' +
-      ' exit=' + (!tv.after) + (r.errors.length ? ' !! ' + r.errors[0] : ''));
+    const okt = tv.shown && tv.t2 !== tv.t1 && tv.step && !tv.after && !r.errors.length;
+    if (!okt) bad++;
+    console.log('── 讲解模式        ' + (okt ? 'PASS' : 'FAIL') +
+      '  1st="' + (tv.t1 || '').slice(0, 20) + '" → "' + (tv.t2 || '').slice(0, 20) + '" ' + (tv.step || ''));
 
-    /* A8. 帧率（软渲染参考值） */
     const fps = await r.evalx(`(function(){ return new Promise(function(res){
       var n = 0, t0 = performance.now();
-      function f(){ n++; if (performance.now() - t0 < 2000) requestAnimationFrame(f); else res('' + Math.round(n / ((performance.now()-t0)/1000))); }
+      function f(){ n++; if (performance.now() - t0 < 1800) requestAnimationFrame(f); else res('' + Math.round(n / ((performance.now()-t0)/1000))); }
       requestAnimationFrame(f); }); })()`) || '0';
-    console.log('   软件渲染帧率     ' + fps + ' fps（SwiftShader 软渲染，真机远高于此）');
+    console.log('   软渲染帧率        ' + fps + ' fps（SwiftShader 参考值）');
 
     if (r.errors.length) { bad++; console.log('   !! JS 错误：' + r.errors.join(' | ')); }
     else console.log('   NO JS ERRORS');
     await r.close();
   }
 
-  /* ============ B. 窄屏 420x860（移动端） ============ */
+  /* ============ B. 移动端 ============ */
   {
     const t = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/new?' + encodeURIComponent('about:blank'), 'PUT'));
     const r = mkTab(t);
-    await r.open(BASE + '?_m=' + Date.now() + '#chip', 5200);
-    await r.send('Emulation.setDeviceMetricsOverride',
-      { width: 420, height: 860, deviceScaleFactor: 2, mobile: true });
-    await wait(1500);
+    await r.open(BASE + '?_m=' + Date.now() + '#chip', 5400);
+    await r.send('Emulation.setDeviceMetricsOverride', { width: 420, height: 860, deviceScaleFactor: 2, mobile: true });
+    await wait(1400);
 
-    const mv = await r.evalx(PROBE) || {};
-    const mvVis = await r.evalx(`(function(){ return JSON.stringify({
-      kpi: getComputedStyle(document.getElementById('cpKpi')).display,
-      card: getComputedStyle(document.getElementById('cpCard')).display,
-      stack: getComputedStyle(document.getElementById('cpStack')).display,
-      inner: window.innerWidth, toggleH: (document.querySelector('.cp-toggle button')||{}).offsetHeight || 0 }); })()`) || {};
-    /* 窄屏 CSS 隐藏：KPI / 图例卡 / 层叠清单；保留：顶栏 + 快切按钮（拇指可点） */
-    const okMob = mv.hud && mv.toggle === 2 && mv.calls > 0 && !mv.nan && !r.errors.length &&
-      mvVis.kpi === 'none' && mvVis.card === 'none' && mvVis.stack === 'none' &&
-      mvVis.inner <= 900 && mvVis.toggleH > 0;
-    if (!okMob) bad++;
-    console.log('── 移动端 420px     ' + (okMob ? 'PASS' : 'FAIL') +
-      '  viewport=' + mvVis.inner + ' KPI=' + mvVis.kpi + ' 图例=' + mvVis.card +
-      ' 清单=' + mvVis.stack + ' 快切高=' + mvVis.toggleH + ' draw=' + mv.calls +
-      (r.errors.length ? ' !! ' + r.errors[0] : ''));
-    await r.shot('chip-mobile.png');
+    const vis = await r.evalx(`(function(){ return JSON.stringify({
+      inner: window.innerWidth,
+      tags: getComputedStyle(document.querySelector('.ck-labels')).display,
+      list: getComputedStyle(document.getElementById('ckList')).display,
+      rowH: (document.querySelector('.ck-row')||{}).offsetHeight || 0,
+      listW: document.getElementById('ckList').scrollWidth
+    }); })()`) || {};
+    const st = await r.evalx(PROBE) || {};
+    const okm = vis.tags === 'none' && vis.list === 'flex' &&
+      vis.rowH > 24 && vis.listW > vis.inner &&
+      st.calls > 20 && !st.nan && !r.errors.length;
+    if (!okm) bad++;
+    console.log('── 移动端 420px    ' + (okm ? 'PASS' : 'FAIL') +
+      '  行高=' + vis.rowH + ' 清单宽=' + vis.listW + ' draw=' + st.calls);
+    await r.shot('chip2-mobile.png');
 
-    /* 移动端也能切微观 */
-    await r.evalx('HL.manager.inst.setParam("view","micro")'); await wait(1700);
-    const mv2 = await r.evalx(PROBE) || {};
-    if (!mv2.calls || mv2.nan || r.errors.length) bad++;
-    console.log('   移动端微观       draw=' + mv2.calls + ' tri=' + mv2.tris +
-      (r.errors.length ? ' !! ' + r.errors[0] : ' PASS'));
-    await r.shot('chip-mobile-micro.png');
+    /* 移动端点击清单 → 出详情卡 */
+    await r.evalx('document.querySelectorAll(".ck-row")[0].click()');
+    await wait(1700);
+    const cardDisp = await r.evalx(`(function(){ return JSON.stringify(getComputedStyle(document.getElementById('ckCard')).display); })()`);
+    const st2 = await r.evalx(PROBE) || {};
+    const okm2 = cardDisp === 'block' && st2.selected === 'ga' && st2.t[0] > 0.5 && !r.errors.length;
+    if (!okm2) bad++;
+    console.log('   移动端拆解        ' + (okm2 ? 'PASS' : 'FAIL') + '  卡片=' + cardDisp + ' t0=' + st2.t[0]);
+    await r.shot('chip2-mobile-gpu.png');
 
     if (r.errors.length) { bad++; console.log('   !! JS 错误：' + r.errors.join(' | ')); }
     await r.close();
   }
 
-  try { await httpReq('http://127.0.0.1:' + PORT + '/json/close/' + tabs[0].id); } catch (e) {}
+
   child.kill();
   console.log(bad === 0 ? '\nALL PASS' : '\nFAILED: ' + bad);
   process.exit(bad === 0 ? 0 : 1);

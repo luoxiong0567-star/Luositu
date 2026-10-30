@@ -1,941 +1,817 @@
 /**
- * 场景：硅基芯片 v2 —— 立体剖面台
+ * 场景：硅基芯片 —— NVIDIA GB300 计算托盘（写实外观 + 点击拆解）
  *
- * 设计语言（参考手绘工程图纸的"轴向剖解图"）：
- *   宏观 = 封装自下而上的堆叠剖面 —— 引脚阵列 → 封装基板 → 硅中介层 / RDL →
- *          微凸块 → 裸片功能区块（GPU：双 die + 8 组 HBM3e；CPU：IOD + 12 CCD）
- *   微观 = 单个计算单元的 BEOL 剖面 —— 硅基底 FinFET 阵列 → M1 → M2 → M3 → 单元分区
+ * 建模依据：GB300 NVL72 compute tray 上半区实拍（用户提供参考图）
+ *   顶部：2 × NVLink 连接器（黑色壳体 + 金手指）
+ *   上部：2 × Blackwell Ultra GPU 封装（金色金属框 + 双 die + 8 组 HBM3e）
+ *   中部：1 × Grace CPU（绿色基板 + 银色 IHS，激光刻字）
+ *   下部：2 × ConnectX-8 SuperNIC（金色边框 + 中央 die）
+ *   全域：VRM 电感阵列、去耦电容、螺丝、板边加固件、底部金手指
  *
- * 视觉要素：
- *   · 程序化生成的密布走线纹理（电源干线 / 总线束 / 随机布线 / 过孔焊盘）
- *   · 过孔与微凸块是真实的 3D 柱状连接，随"层间距"拉伸
- *   · 信号脉冲沿走线路径与过孔缓慢流动（加色发光点 + 拖尾）
- *   · 区块自发光随全局呼吸缓变，带相位差的微光掠过整片裸片
- *   · 右侧实时侧视剖面小图，左下可点击的层叠结构清单
+ * 交互：
+ *   · 点击任意部件 → 该部件沿 +Z 分层升起（封装框 / die / 基板分离）
+ *   · 选中部件发光高亮，其余画面压暗，相机缓动聚焦
+ *   · 再点一次或点空白处 → 收回、复位机位
+ *   · 左键拖动旋转、滚轮 / 双指缩放（OrbitControls）
  *
- * 交互：宏观 / 微观切换、GPU / CPU 切换、点击层叠结构聚焦单层、
- *       点击功能区块下钻单元；讲解模式自下而上走完整条堆叠。
- *
- * 数据来源：厂商标称规格 + 公开架构资料（GPC→SM→处理块、CCD→Core）。
- * 区块位置为按公开版图重建的示意排布，非真实掩膜比例。
+ * 全部几何与贴图由代码生成，不依赖任何外部模型 / 图片。
  */
 HL.registerScene({
   id: 'chip',
   name: '硅基芯片',
-  short: '封装 → 裸片 → 单元的立体剖面台',
+  short: 'GB300 计算托盘：点击部件逐层拆解',
   icon: '⬢',
-  fov: 40,
-  minDistance: 0.8,
-  maxDistance: 120,
-  desc: '一颗现代芯片是一座十几层的立体城市。宏观沿封装自下而上剖开：引脚阵列、基板走线、硅中介层、微凸块、裸片功能区块与 HBM 堆叠；微观下钻到单个计算单元，看 FinFET 鳍阵列与三层金属布线。信号脉冲沿走线与过孔缓慢流动，微光在整片裸片上呼吸。',
+  fov: 38,
+  minDistance: 4.2,
+  maxDistance: 46,
+  desc: 'GB300 计算托盘复刻 · 点击部件逐层拆解，查看规格与作用。',
 
   controls: [
     { type: 'button', key: 'tour', label: '📖 讲解模式' },
-    { type: 'buttons', key: 'view', label: '视角', value: 'macro', options: [
-      { label: '宏观 · 封装堆叠', value: 'macro' },
-      { label: '微观 · 单元内部', value: 'micro' }
-    ] },
-    { type: 'buttons', key: 'chip', label: '芯片', value: 'gpu', options: [
-      { label: 'GPU · B200', value: 'gpu' },
-      { label: 'CPU · EPYC', value: 'cpu' }
-    ] },
-    { type: 'range', key: 'explode', label: '层间距', min: 0, max: 1, step: 0.01, value: 0.62 },
-    { type: 'check', key: 'flow', label: '信号脉冲', value: true },
-    { type: 'check', key: 'pins', label: '引脚 / 凸块', value: true },
-    { type: 'check', key: 'labels', label: '结构标注', value: true },
-    { type: 'check', key: 'spin', label: '缓慢旋转', value: false }
+    { type: 'button', key: 'explodeAll', label: '⧉ 全部拆解' },
+    { type: 'button', key: 'resetView', label: '↺ 复位视角' },
+    { type: 'check', key: 'spin', label: '缓慢旋转', value: false },
+    { type: 'check', key: 'labels', label: '部件标注', value: true },
+    { type: 'check', key: 'glow', label: '发光高亮', value: true }
   ],
 
   create: function (ctx) {
     var THREE = ctx.THREE, scene = ctx.scene, camera = ctx.camera;
-    var controls = ctx.controls, renderer = ctx.renderer, canvas = ctx.canvas;
-    var stageEl = document.getElementById('stage');
-    var raycaster = new THREE.Raycaster();
+    var controls = ctx.controls, renderer = ctx.renderer;
+    var stage = document.getElementById('stage');
+
+    var LOW = (window.innerWidth < 900) || ((navigator.hardwareConcurrency || 8) <= 4);
     var ANISO = (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) ?
       renderer.capabilities.getMaxAnisotropy() : 4;
-    var LOW = (window.innerWidth < 860) || ((navigator.hardwareConcurrency || 8) <= 4);
+
+    /* 板级尺寸（世界单位，1 ≈ 50 mm） */
+    var BW = 8.8, BH = 11.4, BT = 0.16;
+
+    var root = new THREE.Group();
+    root.rotation.set(0.025, -0.075, 0);
+    scene.add(root);
+
+    var boardG = new THREE.Group();     // 载板与静态装饰
+    var partsG = new THREE.Group();     // 可拆解部件
+    root.add(boardG); root.add(partsG);
+
+    var clock = 0;
 
     /* ============================================================
-       一、通用工具与配色
+       一、贴图（全部 canvas 程序化生成）
        ============================================================ */
-    function pad2(n) { return (n < 10 ? '0' : '') + n; }
-    function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
-    function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
-    function easeIO(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-    function mulberry32(a) {
+    function srgb(tex) {
+      if ('colorSpace' in tex && THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+      else if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+      return tex;
+    }
+    function cv(w, h) {
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      return c;
+    }
+    function rnd(seed) {
+      var s = seed >>> 0;
       return function () {
-        a |= 0; a = a + 0x6D2B79F5 | 0;
-        var t = Math.imul(a ^ a >>> 15, 1 | a);
-        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        s = (s * 1664525 + 1013904223) >>> 0;
+        return s / 4294967296;
       };
     }
 
-    var PAL = {
-      plate: 0x0c1a26, si: 0x122a3a, fin: 0x2e6076, gate: 0x74a6bc,
-      dram: 0x2c4f70, dramBase: 0x1f3d57, dieslab: 0x14354a,
-      gpc: 0x1e7f9c, l2: 0x2d5fc0, phy: 0x3f9bd6, io: 0x2b7a9e,
-      iod: 0x27506b, ccd: 0x1e93ad, core: 0x35d6e6,
-      smsp: 0x1e7f9c, lane: 0x56d8ee, reg: 0x2d63c8, l1: 0x2a4d86,
-      fe: 0x1e7f9c, alu: 0x35d6e6, fpu: 0x2d63c8, agu: 0x56d8ee, l1d: 0x3f9bd6,
-      warm: 0xffb454, ball: 0x93a8b5
-    };
+    /* --- PCB：走线、过孔、焊盘、丝印 --- */
+    function makePcb() {
+      var W = 2048, H = Math.round(2048 * BH / BW);
+      var c = cv(W, H), g = c.getContext('2d');
+      function px(x) { return (x + BW / 2) / BW * W; }
+      function py(y) { return (1 - (y + BH / 2) / BH) * H; }
+      function sx(v) { return v / BW * W; }
 
-    /* ============================================================
-       二、程序化纹理：密布走线 + 过孔
-       ============================================================ */
-    function mkGlowTex() {
-      var cv = document.createElement('canvas'); cv.width = cv.height = 64;
-      var c = cv.getContext('2d');
-      var g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
-      g.addColorStop(0, 'rgba(200,246,255,1)');
-      g.addColorStop(0.35, 'rgba(110,220,248,0.5)');
-      g.addColorStop(1, 'rgba(110,220,248,0)');
-      c.fillStyle = g; c.fillRect(0, 0, 64, 64);
-      return new THREE.CanvasTexture(cv);
-    }
-    function mkFloorTex() {
-      var cv = document.createElement('canvas'); cv.width = cv.height = 256;
-      var c = cv.getContext('2d');
-      var g = c.createRadialGradient(128, 128, 8, 128, 128, 176);
-      g.addColorStop(0, 'rgba(70,190,230,0.5)');
-      g.addColorStop(0.5, 'rgba(45,120,170,0.14)');
-      g.addColorStop(1, 'rgba(45,120,170,0)');
-      c.fillStyle = g; c.fillRect(0, 0, 256, 256);
-      return new THREE.CanvasTexture(cv);
-    }
+      g.fillStyle = '#0a1210';
+      g.fillRect(0, 0, W, H);
+      // 大块覆铜区域
+      var rg = g.createLinearGradient(0, 0, W, H);
+      rg.addColorStop(0, 'rgba(18,38,30,.55)');
+      rg.addColorStop(.5, 'rgba(10,22,18,.35)');
+      rg.addColorStop(1, 'rgba(20,40,32,.5)');
+      g.fillStyle = rg; g.fillRect(0, 0, W, H);
 
-    /**
-     * 走线纹理：电源干线 + 总线束 + 随机布线 + 过孔 + 焊盘阵列。
-     * 返回 { tex, paths }；paths 元素为 [起点x, 起点y, 折线点数组]，画布坐标系。
-     */
-    function mkTraceTex(opt) {
-      var S = opt.size || 1024;
-      var rnd = mulberry32(opt.seed || 7);
-      var cv = document.createElement('canvas'); cv.width = cv.height = S;
-      var c = cv.getContext('2d');
-      var bg = opt.bg || '#0a141d';
-      c.fillStyle = bg; c.fillRect(0, 0, S, S);
-      var cell = S / (opt.grid || 64);
-      var line = opt.line || '#2e6f8e', hi = opt.hi || '#67d8f2';
-      var viaC = opt.via || '#9feaff', warm = opt.warm || '#c98a4b';
-      var dens = opt.density === undefined ? 1 : opt.density;
-      var paths = [];
-      function snap(v) { return Math.round(v / cell) * cell; }
-
-      // 细网格
-      c.globalAlpha = 0.05; c.strokeStyle = line; c.lineWidth = 1;
-      c.beginPath();
-      for (var g = 0; g <= 64; g++) {
-        var p = g * cell;
-        c.moveTo(p, 0); c.lineTo(p, S); c.moveTo(0, p); c.lineTo(S, p);
+      var R = rnd(20261030);
+      // 底层随机布线
+      g.lineCap = 'round';
+      for (var i = 0; i < 260; i++) {
+        var x0 = R() * W, y0 = R() * H;
+        var len = 60 + R() * 300, ang = (R() < .5 ? 0 : Math.PI / 2) + (R() - .5) * .18;
+        var x1 = x0 + Math.cos(ang) * len, y1 = y0 + Math.sin(ang) * len;
+        g.strokeStyle = 'rgba(28,66,54,' + (0.18 + R() * 0.3).toFixed(2) + ')';
+        g.lineWidth = R() < .82 ? 1.15 : 2.4;
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+        if (R() < .3) {
+          var x2 = x1 + Math.cos(ang + Math.PI / 2) * (20 + R() * 60);
+          var y2 = y1 + Math.sin(ang + Math.PI / 2) * (20 + R() * 60);
+          g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+        }
       }
-      c.stroke();
-
-      // 电源干线
-      c.globalAlpha = 0.13; c.lineWidth = 3; c.strokeStyle = line;
-      for (var b = 1; b < 8; b++) {
-        var q = b * S / 8;
-        c.beginPath(); c.moveTo(0, q); c.lineTo(S, q); c.stroke();
-        c.beginPath(); c.moveTo(q, 0); c.lineTo(q, S); c.stroke();
-      }
-
-      // 总线束：成组平行走线 + 45° 拐角
-      var bundles = Math.round(13 * dens);
-      for (var i = 0; i < bundles; i++) {
-        var horiz = rnd() < 0.5;
-        var n = 4 + Math.floor(rnd() * 8), pitch = 3 + rnd() * 3;
-        var start = snap(rnd() * S);
-        var len = S * (0.3 + rnd() * 0.6);
-        var from = rnd() * (S - len);
-        var jogA = (0.05 + rnd() * 0.18) * S * (rnd() < 0.5 ? 1 : -1);
-        var jogAt = from + len * (0.3 + rnd() * 0.4);
-        c.globalAlpha = 0.28 + rnd() * 0.3;
-        c.strokeStyle = rnd() < 0.14 ? hi : line;
-        c.lineWidth = 1.4;
-        c.beginPath();
+      // 从封装向板边发散的差分对（45° 折线束）
+      function bundle(cx, cy, n, step, dir) {
         for (var k = 0; k < n; k++) {
-          var off = start + k * pitch, path = [];
-          if (horiz) {
-            var y0 = off;
-            c.moveTo(from, y0); path.push([from, y0]);
-            c.lineTo(jogAt, y0); path.push([jogAt, y0]);
-            c.lineTo(jogAt + Math.abs(jogA), y0 + jogA); path.push([jogAt + Math.abs(jogA), y0 + jogA]);
-            c.lineTo(from + len + Math.abs(jogA), y0 + jogA); path.push([from + len + Math.abs(jogA), y0 + jogA]);
-          } else {
-            var x0 = off;
-            c.moveTo(x0, from); path.push([x0, from]);
-            c.lineTo(x0, jogAt); path.push([x0, jogAt]);
-            c.lineTo(x0 + jogA, jogAt + Math.abs(jogA)); path.push([x0 + jogA, jogAt + Math.abs(jogA)]);
-            c.lineTo(x0 + jogA, from + len + Math.abs(jogA)); path.push([x0 + jogA, from + len + Math.abs(jogA)]);
-          }
-          paths.push([path[0][0], path[0][1], path]);
+          var y = py(cy) + (k - n / 2) * step;
+          var x0 = px(cx), x1 = dir > 0 ? W - 30 - R() * 120 : 30 + R() * 120;
+          var mid = x0 + (x1 - x0) * 0.42;
+          g.strokeStyle = 'rgba(34,80,64,' + (0.22 + R() * 0.22).toFixed(2) + ')';
+          g.lineWidth = 1.1;
+          g.beginPath();
+          g.moveTo(x0, y); g.lineTo(mid, y);
+          g.lineTo(mid + (x1 - mid) * .5, y + (dir > 0 ? -1 : 1) * 26);
+          g.lineTo(x1, y + (dir > 0 ? -1 : 1) * 26);
+          g.stroke();
         }
-        c.stroke();
       }
-
-      // 随机布线（曼哈顿走向）
-      var routes = Math.round(230 * dens);
-      for (i = 0; i < routes; i++) {
-        var x = snap(rnd() * S), y = snap(rnd() * S);
-        var segs = 2 + Math.floor(rnd() * 4);
-        c.globalAlpha = 0.16 + rnd() * 0.42;
-        c.strokeStyle = rnd() < 0.09 ? hi : line;
-        c.lineWidth = 1.2;
-        c.beginPath(); c.moveTo(x, y);
-        var rp = [[x, y]];
-        for (var s2 = 0; s2 < segs; s2++) {
-          var L2 = (0.03 + rnd() * 0.22) * S;
-          var dir = Math.floor(rnd() * 4);
-          var dx = (dir === 0 ? L2 : dir === 1 ? -L2 : 0);
-          var dy = (dir === 2 ? L2 : dir === 3 ? -L2 : 0);
-          x = clamp(x + dx, 4, S - 4); y = clamp(y + dy, 4, S - 4);
-          c.lineTo(x, y); rp.push([x, y]);
-        }
-        c.stroke();
-        if (rp.length > 2 && rnd() < 0.4) paths.push([rp[0][0], rp[0][1], rp]);
-      }
-
-      // 暖色专用走线（die 间互连 / 长距离干轨，少量）
-      var wp = Math.round(5 * dens);
-      for (i = 0; i < wp; i++) {
-        var wy = snap(rnd() * S);
-        c.globalAlpha = 0.45; c.strokeStyle = warm; c.lineWidth = 1.6;
-        c.beginPath(); c.moveTo(0, wy);
-        var wpath = [[0, wy]];
-        var mx = snap(S * (0.3 + rnd() * 0.4));
-        c.lineTo(mx, wy); wpath.push([mx, wy]);
-        var wy2 = clamp(wy + (rnd() < 0.5 ? 1 : -1) * S * 0.12, 8, S - 8);
-        c.lineTo(mx + S * 0.06, wy2); wpath.push([mx + S * 0.06, wy2]);
-        c.lineTo(S, wy2); wpath.push([S, wy2]);
-        c.stroke();
-        paths.push([0, wy, wpath]);
-      }
+      bundle(-3.3, 2.35, 16, 13, -1);
+      bundle(3.3, 2.35, 16, 13, 1);
+      bundle(0, -0.55, 12, 12, -1);
+      bundle(0, -0.55, 12, 12, 1);
+      bundle(-2.2, -3.6, 8, 12, -1);
+      bundle(2.2, -3.6, 8, 12, 1);
 
       // 过孔
-      var vias = Math.round(360 * dens);
-      for (i = 0; i < vias; i++) {
-        var vx = snap(rnd() * S), vy = snap(rnd() * S);
-        c.globalAlpha = 1; c.fillStyle = bg;
-        c.beginPath(); c.arc(vx, vy, 3, 0, 6.29); c.fill();
-        c.strokeStyle = line; c.lineWidth = 1.2; c.globalAlpha = 0.85; c.stroke();
-        c.fillStyle = viaC; c.globalAlpha = 0.7;
-        c.beginPath(); c.arc(vx, vy, 1.25, 0, 6.29); c.fill();
+      for (var v = 0; v < 1500; v++) {
+        var vx = R() * W, vy = R() * H, rr = 1.3 + R() * 1.6;
+        g.beginPath(); g.arc(vx, vy, rr, 0, 6.2832);
+        g.fillStyle = R() < .18 ? 'rgba(120,104,64,.55)' : 'rgba(30,58,48,.7)';
+        g.fill();
+        g.beginPath(); g.arc(vx, vy, rr * .42, 0, 6.2832);
+        g.fillStyle = 'rgba(4,8,7,.85)'; g.fill();
+      }
+      // 焊盘（金）
+      for (var p = 0; p < 220; p++) {
+        var qx = R() * W, qy = R() * H;
+        g.fillStyle = 'rgba(120,101,60,' + (0.22 + R() * 0.22).toFixed(2) + ')';
+        g.fillRect(qx, qy, 5 + R() * 7, 3 + R() * 4);
       }
 
-      // 焊盘阵列块
-      if (opt.pads) {
-        for (i = 0; i < 3; i++) {
-          var bx = snap(S * (0.1 + rnd() * 0.7)), by = snap(S * (0.1 + rnd() * 0.7));
-          for (var r2 = 0; r2 < 5; r2++) for (var c2 = 0; c2 < 7; c2++) {
-            var px2 = bx + c2 * 10, py2 = by + r2 * 10;
-            if (px2 > S - 12 || py2 > S - 12) continue;
-            c.globalAlpha = 0.8; c.strokeStyle = hi; c.lineWidth = 1;
-            c.beginPath(); c.arc(px2, py2, 3, 0, 6.29); c.stroke();
-            c.globalAlpha = 0.3; c.fillStyle = hi;
-            c.beginPath(); c.arc(px2, py2, 1.2, 0, 6.29); c.fill();
-          }
-        }
+      // 丝印
+      function silk(txt, x, y, size, align, alpha) {
+        g.save();
+        g.font = '700 ' + size + 'px Consolas, "Courier New", monospace';
+        g.fillStyle = 'rgba(190,202,196,' + (alpha === undefined ? .46 : alpha) + ')';
+        g.textAlign = align || 'left';
+        g.fillText(txt, x, y);
+        g.restore();
+      }
+      function frame(x, y, w, h, label, alpha) {
+        g.strokeStyle = 'rgba(200,212,204,' + (alpha === undefined ? .28 : alpha) + ')';
+        g.lineWidth = 1.6;
+        g.strokeRect(px(x - w / 2), py(y + h / 2), sx(w), sx(h));
+        if (label) silk(label, px(x - w / 2) + 6, py(y + h / 2) + 22, 19, 'left', .5);
+      }
+      frame(-2.2, 2.35, 3.5, 3.75, 'GPU0 · B300');
+      frame(2.2, 2.35, 3.5, 3.75, 'GPU1 · B300');
+      frame(0, -0.55, 2.6, 2.6, 'CPU · GRACE');
+      frame(-1.55, -3.6, 1.45, 1.45, 'CX8_0', .22);
+      frame(1.55, -3.6, 1.45, 1.45, 'CX8_1', .22);
+      silk('NVIDIA  GB300  NVL72  COMPUTE TRAY', px(-3.9), py(-5.02), 26, 'left', .5);
+      silk('P4242  ASSY  REV.A2', px(0.4), py(-5.02), 20, 'left', .36);
+      silk('48V  ·  VRM  ·  DO NOT TOUCH', px(-3.9), py(-2.35), 17, 'left', .3);
+      silk('NVLink-C2C', px(-0.95), py(5.28), 18, 'left', .42);
+      silk('HBM3e  8-HI', px(-3.35), py(4.35), 15, 'left', .3);
+      // 条码
+      for (var b = 0; b < 34; b++) {
+        var bx = px(2.2) + b * 6;
+        g.fillStyle = 'rgba(200,210,204,' + (R() * .4 + .2).toFixed(2) + ')';
+        g.fillRect(bx, py(-4.72), R() < .5 ? 2 : 4, 34);
+      }
+      // 板边测试点
+      g.fillStyle = 'rgba(170,146,86,.5)';
+      for (var e = 0; e < 22; e++) {
+        g.fillRect(px(-4.15) + 0, py(-4.2 + e * .38), 8, 8);
+        g.fillRect(px(4.1), py(-4.2 + e * .38), 8, 8);
       }
 
-      // 四角基准标记
-      c.globalAlpha = 0.9; c.strokeStyle = hi; c.lineWidth = 1.4;
-      [[14, 14], [S - 14, 14], [14, S - 14], [S - 14, S - 14]].forEach(function (f) {
-        c.beginPath(); c.arc(f[0], f[1], 6, 0, 6.29); c.stroke();
-        c.beginPath(); c.moveTo(f[0] - 10, f[1]); c.lineTo(f[0] + 10, f[1]);
-        c.moveTo(f[0], f[1] - 10); c.lineTo(f[0], f[1] + 10); c.stroke();
-      });
-      c.globalAlpha = 1;
-
-      var tex = new THREE.CanvasTexture(cv);
+      var tex = new THREE.CanvasTexture(c);
       tex.anisotropy = ANISO;
-      return { tex: tex, paths: paths };
+      return srgb(tex);
     }
 
-    var glowTex = mkGlowTex();
-
-    /* ============================================================
-       三、材质与几何工具
-       ============================================================ */
-    var boxGeo = new THREE.BoxGeometry(1, 1, 1);
-    var cylGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
-    var ballGeo = new THREE.SphereGeometry(1, 6, 5);
-
-    function plateMat(col, rough) {
-      return new THREE.MeshStandardMaterial({
-        color: col, roughness: rough === undefined ? 0.82 : rough, metalness: 0.38
-      });
-    }
-    function blockMat() {
-      return new THREE.MeshStandardMaterial({
-        color: 0xffffff, roughness: 0.5, metalness: 0.32,
-        emissive: 0x0a2230, emissiveIntensity: 0.55
-      });
-    }
-    function edgeLineMat(col, op) {
-      return new THREE.LineBasicMaterial({
-        color: col, transparent: true, opacity: op === undefined ? 0.25 : op,
-        blending: THREE.AdditiveBlending, depthWrite: false
-      });
-    }
-    function traceMat(tex) {
-      return new THREE.MeshStandardMaterial({
-        map: tex, color: 0x9db8c6, roughness: 0.85, metalness: 0.3,
-        emissive: 0x2e7d9c, emissiveMap: tex, emissiveIntensity: 0.42
-      });
-    }
-    var _m4 = new THREE.Matrix4(), _q0 = new THREE.Quaternion();
-    var _p = new THREE.Vector3(), _s = new THREE.Vector3(), _col = new THREE.Color();
-
-    function pushBoxEdges(arr, b) {
-      var x0 = b.x - b.w / 2, x1 = b.x + b.w / 2;
-      var z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
-      var y0 = b.y, y1 = b.y + b.h;
-      var cn = [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
-                [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]];
-      var E = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4],
-               [0, 4], [1, 5], [2, 6], [3, 7]];
-      for (var i = 0; i < E.length; i++) {
-        var a = cn[E[i][0]], bb = cn[E[i][1]];
-        arr.push(a[0], a[1], a[2], bb[0], bb[1], bb[2]);
+    /* --- 裸片：衍射虹彩 --- */
+    function makeDie(seed, warm) {
+      var c = cv(512, 512), g = c.getContext('2d');
+      g.fillStyle = '#05060b'; g.fillRect(0, 0, 512, 512);
+      var R = rnd(seed);
+      var cols = warm
+        ? ['rgba(120,88,32,.30)', 'rgba(74,56,132,.26)', 'rgba(34,96,112,.22)', 'rgba(150,116,60,.18)']
+        : ['rgba(78,58,140,.32)', 'rgba(42,96,146,.28)', 'rgba(36,120,112,.22)', 'rgba(120,96,48,.17)'];
+      for (var i = 0; i < 9; i++) {
+        var lg = g.createLinearGradient(R() * 512, 0, R() * 512, 512);
+        lg.addColorStop(0, 'rgba(0,0,0,0)');
+        lg.addColorStop(.35 + R() * .3, cols[i % cols.length]);
+        lg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = lg; g.fillRect(0, 0, 512, 512);
       }
+      // 逻辑块
+      for (var b = 0; b < 90; b++) {
+        var x = R() * 470, y = R() * 470, w = 12 + R() * 46, h = 10 + R() * 40;
+        g.fillStyle = 'rgba(140,160,190,' + (0.03 + R() * 0.05).toFixed(2) + ')';
+        g.fillRect(x, y, w, h);
+        g.strokeStyle = 'rgba(160,185,210,.05)';
+        g.strokeRect(x, y, w, h);
+      }
+      // 细密网格（金属层）
+      g.strokeStyle = 'rgba(120,150,180,.10)';
+      g.lineWidth = 1;
+      for (var k = 0; k < 64; k++) {
+        g.beginPath(); g.moveTo(0, k * 8 + .5); g.lineTo(512, k * 8 + .5); g.stroke();
+        g.beginPath(); g.moveTo(k * 8 + .5, 0); g.lineTo(k * 8 + .5, 512); g.stroke();
+      }
+      // 边缘收边
+      g.strokeStyle = 'rgba(220,230,240,.18)';
+      g.lineWidth = 3; g.strokeRect(3, 3, 506, 506);
+      var tex = new THREE.CanvasTexture(c);
+      tex.anisotropy = ANISO;
+      return srgb(tex);
+    }
+
+    /* --- Grace CPU 顶盖：拉丝金属 + 激光刻字 --- */
+    function makeIhs() {
+      var c = cv(512, 512), g = c.getContext('2d');
+      var lg = g.createLinearGradient(0, 0, 512, 512);
+      lg.addColorStop(0, '#b6bec7');
+      lg.addColorStop(.35, '#8b949e');
+      lg.addColorStop(.6, '#a8b1ba');
+      lg.addColorStop(1, '#6f7882');
+      g.fillStyle = lg; g.fillRect(0, 0, 512, 512);
+      // 拉丝
+      var R = rnd(77);
+      for (var i = 0; i < 900; i++) {
+        g.strokeStyle = 'rgba(255,255,255,' + (R() * .07).toFixed(3) + ')';
+        g.lineWidth = 1;
+        var y = R() * 512;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(512, y + (R() - .5) * 3); g.stroke();
+      }
+      // 激光刻字
+      g.fillStyle = 'rgba(24,29,35,.92)';
+      g.font = '700 92px "Segoe UI", Arial, sans-serif';
+      g.fillText('GRACE', 74, 226);
+      g.font = '600 30px Consolas, monospace';
+      g.fillStyle = 'rgba(30,36,44,.86)';
+      g.fillText('NVIDIA', 76, 276);
+      g.fillText('72-CORE  ARM  NEOVERSE  V2', 76, 318);
+      g.font = '500 24px Consolas, monospace';
+      g.fillStyle = 'rgba(42,50,60,.7)';
+      g.fillText('2026  ·  TSMC 4N  ·  LPDDR5X', 76, 356);
+      g.fillText('P4242-0001', 76, 392);
+      // 边缘倒角高光
+      g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 5;
+      g.strokeRect(2.5, 2.5, 507, 507);
+      var tex = new THREE.CanvasTexture(c);
+      tex.anisotropy = ANISO;
+      return srgb(tex);
+    }
+
+    var TEX = { pcb: makePcb(), dieA: makeDie(11, false), dieB: makeDie(23, true), ihs: makeIhs() };
+
+    /* ============================================================
+       二、材质与几何工具
+       ============================================================ */
+    function mkMat(kind) {
+      var m;
+      switch (kind) {
+        case 'gold':
+          m = new THREE.MeshStandardMaterial({ color: 0x6b5226, metalness: 0.62, roughness: 0.56, emissive: 0x0c0802, emissiveIntensity: 0.05 });
+          break;
+        case 'goldD':
+          m = new THREE.MeshStandardMaterial({ color: 0x4e3c1c, metalness: 0.6, roughness: 0.6, emissive: 0x080502, emissiveIntensity: 0.04 });
+          break;
+        case 'silver':
+          m = new THREE.MeshStandardMaterial({ color: 0x6d747e, metalness: 0.70, roughness: 0.55, emissive: 0x080c10, emissiveIntensity: 0.06 });
+          break;
+        case 'ihs':
+          m = new THREE.MeshStandardMaterial({ map: TEX.ihs, color: 0x7d858f, metalness: 0.52, roughness: 0.52, emissive: 0x070a0e, emissiveIntensity: 0.03 });
+          break;
+        case 'sub':
+          m = new THREE.MeshStandardMaterial({ color: 0x091510, metalness: 0.14, roughness: 0.82, emissive: 0x020704, emissiveIntensity: 0.04 });
+          break;
+        case 'die':
+          m = new THREE.MeshStandardMaterial({ map: TEX.dieA, color: 0x7a8296, metalness: 0.26, roughness: 0.40, emissive: 0x090a14, emissiveIntensity: 0.16 });
+          break;
+        case 'die2':
+          m = new THREE.MeshStandardMaterial({ map: TEX.dieB, color: 0x7a8296, metalness: 0.26, roughness: 0.42, emissive: 0x0c0812, emissiveIntensity: 0.16 });
+          break;
+        case 'black':
+          m = new THREE.MeshStandardMaterial({ color: 0x0c0e11, metalness: 0.40, roughness: 0.62, emissive: 0x030405, emissiveIntensity: 0.10 });
+          break;
+        case 'plastic':
+          m = new THREE.MeshStandardMaterial({ color: 0x101317, metalness: 0.18, roughness: 0.86, emissive: 0x030405, emissiveIntensity: 0.08 });
+          break;
+        case 'copper':
+          m = new THREE.MeshStandardMaterial({ color: 0xa96f42, metalness: 0.92, roughness: 0.34, emissive: 0x1c0e05, emissiveIntensity: 0.2 });
+          break;
+        case 'ceramic':
+          m = new THREE.MeshStandardMaterial({ color: 0x262420, metalness: 0.06, roughness: 0.94, emissive: 0x060503, emissiveIntensity: 0.03 });
+          break;
+        default:
+          m = new THREE.MeshStandardMaterial({ color: 0x2a2e34, metalness: 0.7, roughness: 0.45 });
+      }
+      m.envMapIntensity = 0.50;
+      m.userData.baseEmissive = m.emissiveIntensity;
+      return m;
+    }
+
+    function box(w, h, d, mat, x, y, z, parent) {
+      var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x || 0, y || 0, z || 0);
+      if (parent) parent.add(m);
+      return m;
+    }
+    function roundedPlate(w, h, r, depth, mat, parent) {
+      var s = new THREE.Shape();
+      var x = -w / 2, y = -h / 2;
+      s.moveTo(x + r, y);
+      s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+      s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+      s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+      var g = new THREE.ExtrudeGeometry(s, { depth: depth, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.015, bevelSegments: 1 });
+      var m = new THREE.Mesh(g, mat);
+      if (parent) parent.add(m);
+      return m;
+    }
+    function framePlate(w, h, iw, ih, depth, mat, parent) {
+      var s = new THREE.Shape();
+      var r = 0.05, x = -w / 2, y = -h / 2;
+      s.moveTo(x + r, y);
+      s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+      s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+      s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+      var hole = new THREE.Path();
+      var hx = -iw / 2, hy = -ih / 2;
+      hole.moveTo(hx, hy); hole.lineTo(hx + iw, hy);
+      hole.lineTo(hx + iw, hy + ih); hole.lineTo(hx, hy + ih);
+      hole.lineTo(hx, hy);
+      s.holes.push(hole);
+      var g = new THREE.ExtrudeGeometry(s, { depth: depth, bevelEnabled: true, bevelSize: 0.025, bevelThickness: 0.02, bevelSegments: 1 });
+      var m = new THREE.Mesh(g, mat);
+      if (parent) parent.add(m);
+      return m;
     }
 
     /* ============================================================
-       四、芯片数据
+       三、载板与静态元件
        ============================================================ */
-    var CHIPS = {
-      gpu: {
-        key: 'gpu', name: 'Blackwell B200', vendor: 'NVIDIA · GB100', node: 'TSMC 4NP',
-        pkg: 'CoWoS-L 2.5D · 硅中介层', unit: 'SM',
-        kpi: [['2080', '亿', '晶体管'], ['2', 'die', '裸片'], ['192', 'GB', 'HBM3e'],
-              ['8', 'TB/s', '显存带宽'], ['1000', 'W', '整卡功耗']],
-        legend: [['#1e7f9c', 'GPC 图形处理簇', '16 组'], ['#2d5fc0', 'L2 缓存切片', '32 片'],
-                 ['#3f9bd6', 'HBM PHY', '8 组'], ['#ffb454', 'NV-HBI die 间互连', '10 TB/s'],
-                 ['#2c4f70', 'HBM3e 存储堆叠', '8 × 24 GB']],
-        legendMicro: [['#1e7f9c', 'SMSP 处理块', '4 个'], ['#56d8ee', 'FP32 通道', '128'],
-                 ['#ffb454', '张量核', '4 个'], ['#2d63c8', '寄存器堆 bank', '8 组'],
-                 ['#2a4d86', 'L1 / 共享内存', '256 KB']],
-        scale: '≈ 65 × 65 mm 封装', area: '≈ 1.3 mm² / SM',
-        note: '双裸片以 10 TB/s 的 NV-HBI 互连合成一颗逻辑 GPU；HBM3e 以 3D 堆叠贴装在硅中介层两侧。'
-      },
-      cpu: {
-        key: 'cpu', name: 'EPYC 9965', vendor: 'AMD · Turin Dense', node: 'TSMC 3nm',
-        pkg: 'SHP 有机基板 · 13 chiplet', unit: 'Core',
-        kpi: [['192', '核', 'Zen 5c'], ['384', '线程', 'SMT'], ['384', 'MB', 'L3 缓存'],
-              ['12', 'ch', 'DDR5-6000'], ['500', 'W', '功耗上限']],
-        legend: [['#27506b', 'IOD 输入输出裸片', '1 颗 · 12nm'], ['#1e93ad', 'CCD 计算裸片', '12 颗 · 3nm'],
-                 ['#35d6e6', 'Zen 5c 核心', '192 个'], ['#3f9bd6', 'DDR5 PHY', '12 通道'],
-                 ['#ffb454', 'PCIe 5.0 控制器', '128 lane']],
-        legendMicro: [['#1e7f9c', '前端 · 8-wide 解码', '1 组'], ['#35d6e6', '整数 ALU', '6 个'],
-                 ['#2d63c8', 'FMA 512-bit', '2 条'], ['#56d8ee', 'AGU 存取单元', '2 个'],
-                 ['#3f9bd6', 'L1D / L2', '48 KB / 1 MB']],
-        scale: '≈ 70 × 78 mm 封装', area: '≈ 2.8 mm² / 核',
-        note: '13 颗 chiplet 以有机基板互连：中央 IOD 挂 12 通道 DDR5 与 PCIe，两侧 12 颗 CCD 各含 16 核。'
+    var pcbMat = new THREE.MeshStandardMaterial({ map: TEX.pcb, color: 0x8b938c, metalness: 0.26, roughness: 0.76 });
+    pcbMat.envMapIntensity = 0.45;
+    var pcbSide = new THREE.MeshStandardMaterial({ color: 0x08110f, metalness: 0.25, roughness: 0.80 });
+    var pcb = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BT), [pcbSide, pcbSide, pcbSide, pcbSide, pcbMat, pcbSide]);
+    boardG.add(pcb);
+
+    /* 板边金属包边 */
+    var edgeMat = mkMat('goldD');
+    [[0, BH / 2 - 0.03, BW, 0.06], [0, -BH / 2 + 0.03, BW, 0.06],
+     [-BW / 2 + 0.03, 0, 0.06, BH], [BW / 2 - 0.03, 0, 0.06, BH]].forEach(function (e) {
+      box(e[2], e[3], 0.05, edgeMat, e[0], e[1], BT / 2 + 0.01, boardG);
+    });
+
+    /* 底部金手指连接器 */
+    var fingerMat = mkMat('gold');
+    var housing = box(BW - 0.5, 0.42, 0.26, mkMat('plastic'), 0, -BH / 2 + 0.34, BT / 2 + 0.11, boardG);
+    var fingers = new THREE.InstancedMesh(new THREE.BoxGeometry(0.055, 0.30, 0.02), fingerMat, 96);
+    var dummy = new THREE.Object3D();
+    for (var fi = 0; fi < 96; fi++) {
+      dummy.position.set(-BW / 2 + 0.52 + fi * 0.0802, -BH / 2 + 0.34, BT / 2 + 0.245);
+      dummy.updateMatrix(); fingers.setMatrixAt(fi, dummy.matrix);
+    }
+    boardG.add(fingers);
+
+    /* 螺丝 */
+    var screwGeo = new THREE.CylinderGeometry(0.115, 0.115, 0.05, 16);
+    var screwMat = mkMat('silver');
+    var screwPos = [[-3.95, 5.2], [3.95, 5.2], [-3.95, -5.25], [3.95, -5.25],
+                    [-3.95, 1.15], [3.95, 1.15], [-3.95, -2.3], [3.95, -2.3],
+                    [-0.85, 5.2], [0.85, 5.2]];
+    screwPos.forEach(function (p) {
+      var s = new THREE.Mesh(screwGeo, screwMat);
+      s.rotation.x = Math.PI / 2;
+      s.position.set(p[0], p[1], BT / 2 + 0.03);
+      boardG.add(s);
+      var hole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.055, 12), mkMat('black'));
+      hole.rotation.x = Math.PI / 2;
+      hole.position.set(p[0], p[1], BT / 2 + 0.045);
+      boardG.add(hole);
+    });
+
+    /* 电容阵列（一次性实例化，静态） */
+    (function caps() {
+      var n = LOW ? 150 : 240;
+      var geo = new THREE.BoxGeometry(0.07, 0.05, 0.045);
+      var mat = mkMat('ceramic');
+      var inst = new THREE.InstancedMesh(geo, mat, n);
+      var R = rnd(99);
+      var zones = [
+        [-3.9, -3.1, 2.7, 3.1], [2.7, 3.9, -3.1, 3.1],
+        [-3.9, -1.0, -4.9, -2.6], [1.0, 3.9, -4.9, -2.6],
+        [-2.9, 2.9, 4.1, 4.9], [-2.9, 2.9, -0.95, 0.35]
+      ];
+      for (var i = 0; i < n; i++) {
+        var z = zones[i % zones.length];
+        var x = z[0] + R() * (z[1] - z[0]);
+        var y = z[2] + R() * (z[3] - z[2]);
+        dummy.position.set(x, y, BT / 2 + 0.035);
+        dummy.rotation.set(0, 0, R() < .5 ? 0 : Math.PI / 2);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
       }
-    };
+      boardG.add(inst);
+    })();
+
+    /* 电源 / 管理接口与加固件（对应实拍里几处黑色大连接器） */
+    (function connectors() {
+      var pm = mkMat('plastic');
+      var sm = mkMat('silver');
+      // 左下：电源输入
+      box(1.18, 0.92, 0.34, pm, -3.18, -4.28, 0.20, boardG);
+      box(0.86, 0.10, 0.06, mkMat('goldD'), -3.18, -4.02, 0.38, boardG);
+      // 右下：两组信号连接器
+      box(0.56, 0.86, 0.30, pm, 3.06, -4.30, 0.18, boardG);
+      box(0.56, 0.46, 0.30, pm, 3.06, -3.55, 0.18, boardG);
+      // 顶部左侧：管理接口
+      box(0.72, 0.40, 0.26, pm, -3.12, 5.14, 0.17, boardG);
+      // 板边 L 形加固片
+      box(0.10, 1.5, 0.30, sm, -4.42, -0.4, 0.16, boardG);
+      box(0.10, 1.5, 0.30, sm, 4.42, -0.4, 0.16, boardG);
+    })();
+
+    /* SMD 小件：贴着封装外围成排布置，撑起板面密度 */
+    (function smd() {
+      var n = LOW ? 130 : 230;
+      var inst = new THREE.InstancedMesh(new THREE.BoxGeometry(0.095, 0.05, 0.032),
+        new THREE.MeshStandardMaterial({ color: 0x1b1d21, metalness: 0.25, roughness: 0.8 }), n);
+      var R = rnd(43);
+      var zones = [
+        [-3.35, -2.95, 0.5, 4.25], [2.95, 3.35, 0.5, 4.25],
+        [-2.85, 2.85, -2.15, -1.55], [-2.85, 2.85, -4.55, -3.05],
+        [-3.35, -2.35, -2.1, -1.3], [2.35, 3.35, -2.1, -1.3],
+        [-1.95, 1.95, 4.45, 4.85]
+      ];
+      for (var i = 0; i < n; i++) {
+        var z = zones[i % zones.length];
+        dummy.position.set(z[0] + R() * (z[1] - z[0]), z[2] + R() * (z[3] - z[2]), BT / 2 + 0.03);
+        dummy.rotation.set(0, 0, R() < .55 ? 0 : Math.PI / 2);
+        dummy.scale.set(0.7 + R() * 0.8, 1, 1);
+        dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+      }
+      boardG.add(inst);
+    })();
+
+    /* 侧边加固导轨 */
+    var railMat = mkMat('black');
+    [-1, 1].forEach(function (s) {
+      box(0.16, BH - 1.2, 0.34, railMat, s * (BW / 2 + 0.06), 0.1, 0.12, boardG);
+      box(0.24, 0.5, 0.5, mkMat('silver'), s * (BW / 2 + 0.06), BH / 2 - 0.75, 0.16, boardG);
+      box(0.24, 0.5, 0.5, mkMat('silver'), s * (BW / 2 + 0.06), -BH / 2 + 0.95, 0.16, boardG);
+    });
 
     /* ============================================================
-       五、装配
+       四、可拆解部件
        ============================================================ */
-    var world = new THREE.Group();
-    scene.add(world);
-    var macroRoot = new THREE.Group(), microRoot = new THREE.Group();
-    macroRoot.visible = true; microRoot.visible = false;
-    world.add(macroRoot); world.add(microRoot);
+    var parts = {};      // id -> part
+    var partList = [];
 
-    var links = [];                                  // 随层间距拉伸的连接柱
-    var flows = [];                                  // 信号脉冲系统
-    var breathMats = [];                             // 呼吸的走线材质
-    var allLayers = { gpu: null, cpu: null };
-    var microLayers = { gpu: null, cpu: null };
-    var pickSets = { macro: {}, micro: {} };
-    var TEXS = [];
-
-    function newLayer(def, parent) {
-      var L = {
-        id: def.id, name: def.name, en: def.en, note: def.note || '',
-        y0: def.y0, dy: def.dy, curY: def.y0, W: def.xw || 9.0,
-        group: new THREE.Group()
+    function addPart(id, group, info, opt) {
+      opt = opt || {};
+      group.userData.part = id;
+      partsG.add(group);
+      var mats = [];
+      group.traverse(function (o) {
+        if (o.material) {
+          var ms = Array.isArray(o.material) ? o.material : [o.material];
+          ms.forEach(function (m) {
+            if (mats.indexOf(m) < 0) mats.push(m);
+            m.userData.baseEmissive = m.userData.baseEmissive === undefined ? (m.emissiveIntensity || 0) : m.userData.baseEmissive;
+            if (m.emissive && m.userData.baseEmissiveColor === undefined) m.userData.baseEmissiveColor = m.emissive.getHex();
+          });
+        }
+      });
+      var p = {
+        id: id, group: group, info: info, mats: mats,
+        layers: opt.layers || [], anchor: opt.anchor || [0, 0, 0],
+        glowColor: opt.glowColor === undefined ? 0x2fd8ff : opt.glowColor,
+        t: 0, target: 0, delay: opt.delay || 0,
+        tag: null, dot: null, line: null, glow: null
       };
-      L.group.position.y = L.y0;
-      parent.add(L.group);
-      return L;
+      var gm = ctx.glowSprite('rgba(92,225,240,0.55)');
+      var sp = new THREE.Sprite(gm);
+      sp.scale.set((opt.glowSize || 3.4) * 0.62, (opt.glowSize || 3.4) * 0.62, 1);
+      sp.position.set(opt.anchor ? opt.anchor[0] : 0, opt.anchor ? opt.anchor[1] : 0, 0.12);
+      sp.material.opacity = 0;
+      group.add(sp);
+      p.glow = sp;
+      parts[id] = p;
+      partList.push(p);
+      return p;
     }
 
-    /** 走线面板：薄板 + 顶面走线纹理 + 蓝图描边 */
-    function addPlate(L, w, d, thick, slabY, texInfo, opt) {
-      opt = opt || {};
-      var slab = new THREE.Mesh(new THREE.BoxGeometry(w, thick, d), plateMat(opt.col || PAL.plate));
-      slab.position.y = slabY;
-      L.group.add(slab);
-      var eg = new THREE.EdgesGeometry(slab.geometry);
-      var edge = new THREE.LineSegments(eg, edgeLineMat(0x4db6d8, 0.3));
-      edge.position.y = slabY;
-      L.group.add(edge);
-      if (texInfo) {
-        var tm = traceMat(texInfo.tex);
-        breathMats.push({ mat: tm, base: 0.42, amp: opt.glow === undefined ? 0.2 : opt.glow });
-        var plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), tm);
-        plane.rotation.x = -Math.PI / 2;
-        plane.position.y = slabY + thick / 2 + 0.002;
-        L.group.add(plane);
+    /* ---------- GPU 封装 ---------- */
+    function buildGpu(x, y, id, name, dieTex, anchorSide) {
+      var g = new THREE.Group();
+      g.position.set(x, y, 0.02);
+      g.scale.set(0.9, 0.9, 0.9);
+
+      var subMat = mkMat('sub');
+      var sub = box(3.5, 3.72, 0.09, subMat, 0, 0, 0.045, g);
+      // 基板侧边焊盘
+      var padMat = mkMat('goldD');
+      for (var s = 0; s < 10; s++) {
+        box(0.16, 0.05, 0.05, padMat, -1.55 + s * 0.34, -1.83, 0.06, g);
+        box(0.16, 0.05, 0.05, padMat, -1.55 + s * 0.34, 1.83, 0.06, g);
       }
-      return slab;
-    }
 
-    /** 功能区块阵列 */
-    function addBlocks(L, list, opt) {
-      opt = opt || {};
-      var mesh = new THREE.InstancedMesh(boxGeo, blockMat(), list.length);
-      mesh.frustumCulled = false;
-      list.forEach(function (b, i) {
-        _p.set(b.x, b.y + b.h / 2, b.z);
-        _s.set(b.w, b.h, b.d);
-        _m4.compose(_p, _q0, _s);
-        mesh.setMatrixAt(i, _m4);
-        b.baseCol = b.col;
-        mesh.setColorAt(i, _col.setHex(b.col));
-        b.ph = (b.x + b.z) * 0.55;
-        b.idx = i;
+      // 8 组 HBM3e：左右各 4
+      var hbmG = new THREE.Group(); g.add(hbmG);
+      var hbmMat = new THREE.MeshStandardMaterial({ color: 0x2c3138, metalness: 0.38, roughness: 0.72, emissive: 0x030405, emissiveIntensity: 0.03 });
+      hbmMat.envMapIntensity = 0.28;
+      var hbmTop = mkMat('black');
+      [-1.30, 1.30].forEach(function (hx) {
+        for (var i = 0; i < 4; i++) {
+          var hy = -1.32 + i * 0.88;
+          box(0.40, 0.66, 0.10, hbmMat, hx, hy, 0.135, hbmG);
+          box(0.34, 0.58, 0.015, hbmTop, hx, hy, 0.192, hbmG);
+          box(0.34, 0.010, 0.015, mkMat('goldD'), hx, hy + 0.29, 0.199, hbmG);
+        }
       });
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      L.group.add(mesh);
-      var pos = [];
-      if (!opt.noEdge) list.forEach(function (b) { pushBoxEdges(pos, b); });
-      var eg = new THREE.BufferGeometry();
-      eg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      var lines = new THREE.LineSegments(eg, edgeLineMat(0x67d8f2, opt.edgeOp === undefined ? 0.2 : opt.edgeOp));
-      lines.frustumCulled = false;
-      L.group.add(lines);
-      L.blocks = list; L.blockMesh = mesh; L.blockLines = lines;
-      if (opt.pick) pickSets[opt.pick.view][opt.pick.chip] = { mesh: mesh, list: list };
-      return mesh;
-    }
 
-    /** 点阵实例（引脚 / 触点，不随层间距变化） */
-    function addPads(L, items, geo, mat, scl) {
-      var mesh = new THREE.InstancedMesh(geo, mat, items.length);
-      mesh.frustumCulled = false;
-      for (var i = 0; i < items.length; i++) {
-        _p.set(items[i][0], 0, items[i][1]);
-        _s.set(scl[0], scl[1], scl[2]);
-        _m4.compose(_p, _q0, _s);
-        mesh.setMatrixAt(i, _m4);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-      L.group.add(mesh);
-      return mesh;
-    }
+      // 双 die
+      var dieG = new THREE.Group(); g.add(dieG);
+      [-0.53, 0.53].forEach(function (dx, i) {
+        box(1.02, 2.52, 0.10, mkMat('die'), dx, 0, 0.145, dieG);
+        var top = box(0.98, 2.46, 0.012, i === 0 ? mkMat('die') : mkMat('die2'), dx, 0, 0.202, dieG);
+        top.material.map = TEX.dieA;
+        top.material.color.setHex(i === 0 ? 0x7a8296 : 0x747c90);
+        top.material.needsUpdate = true;
+        // 裸片四周封边（seal ring），让暗色硅片有清晰轮廓
+        var sealMat = new THREE.MeshStandardMaterial({ color: 0x8d8574, metalness: 0.6, roughness: 0.45, emissive: 0x0a0906, emissiveIntensity: 0.1 });
+        box(1.02, 0.022, 0.012, sealMat, dx, 1.26, 0.203, dieG);
+        box(1.02, 0.022, 0.012, sealMat, dx, -1.26, 0.203, dieG);
+        box(0.022, 2.54, 0.012, sealMat, dx - 0.51, 0, 0.203, dieG);
+        box(0.022, 2.54, 0.012, sealMat, dx + 0.51, 0, 0.203, dieG);
+      });
+      // die 间缝隙的填充胶
+      box(0.06, 2.4, 0.03, mkMat('black'), 0, 0, 0.155, dieG);
 
-    /** 连接柱（TSV / 微凸块 / 过孔）：随层间距拉伸 */
-    function addLinks(view, owner, a, b, items, opt) {
-      opt = opt || {};
-      var mesh = new THREE.InstancedMesh(cylGeo, new THREE.MeshStandardMaterial({
-        color: opt.col || 0x3d7e99, roughness: 0.45, metalness: 0.6,
-        emissive: opt.warm ? 0x5a3a12 : 0x0a2430, emissiveIntensity: 0.5
-      }), items.length);
-      mesh.frustumCulled = false;
-      var lk = {
-        a: a, b: b, oa: opt.oa || 0, ob: opt.ob || 0, items: items,
-        mesh: mesh, r: opt.r || 0.03, owner: owner
+      // 金色封装框
+      var frame = framePlate(3.56, 3.78, 3.12, 3.38, 0.13, mkMat('gold'), g);
+      frame.position.set(0, 0, 0.20);
+
+      // 封装四角定位标记
+      [[-1.62, -1.76], [1.62, -1.76], [-1.62, 1.76], [1.62, 1.76]].forEach(function (c) {
+        box(0.12, 0.12, 0.02, mkMat('goldD'), c[0], c[1], 0.33, g);
+      });
+
+      var info = {
+        name: name, en: 'BLACKWELL ULTRA GPU',
+        params: [['制程', 'TSMC 4NP'], ['晶体管', '2080 亿'], ['显存', '288 GB HBM3e'], ['带宽', '8 TB/s']],
+        desc: 'GB300 的计算核心。一个封装内含两颗光罩极限尺寸的裸片，通过 NV-HBI 以 10 TB/s 互连成一颗逻辑 GPU；四周 8 组 HBM3e 堆叠提供 288 GB 显存。'
       };
-      links.push(lk);
-      (view === 'macro' ? macroRoot : microRoot).add(mesh);
-      return lk;
-    }
-    function rebuildLink(lk) {
-      var y1 = lk.a.curY + lk.oa, y2 = lk.b.curY + lk.ob;
-      var h = Math.max(0.015, y2 - y1);
-      var mid = (y1 + y2) / 2;
-      for (var i = 0; i < lk.items.length; i++) {
-        var it = lk.items[i];
-        _p.set(it[0], mid, it[1]);
-        _s.set(lk.r, h, lk.r);
-        _m4.compose(_p, _q0, _s);
-        lk.mesh.setMatrixAt(i, _m4);
-      }
-      lk.mesh.instanceMatrix.needsUpdate = true;
+      var p = addPart(id, g, info, {
+        layers: [
+          { obj: frame, dz: 0.62, dy: 0.10, delay: 0.00 },
+          { obj: hbmG, dz: 0.30, dy: 0.02, delay: 0.10 },
+          { obj: dieG, dz: 0.20, dy: 0.02, delay: 0.16 }
+        ],
+        anchor: [0, 2.12, 0.3], glowColor: 0x6fe6ff, glowSize: 4.6
+      });
+      p.dieTex = dieTex;
+      return p;
     }
 
-    /* ---- 信号脉冲 ---- */
-    function makeFlow(items, parent, owner) {
-      var n = items.length * 2;
-      var pos = new Float32Array(n * 3);
-      var col = new Float32Array(n * 3);
-      for (var i = 0; i < items.length; i++) {
-        var c = items[i].warm ? 1.0 : 0.72;
-        col[i * 6] = 0.62 * c; col[i * 6 + 1] = 0.92 * c; col[i * 6 + 2] = 1.0 * c;
-        col[i * 6 + 3] = 0.16 * c; col[i * 6 + 4] = 0.34 * c; col[i * 6 + 5] = 0.44 * c;
+    buildGpu(-2.18, 2.35, 'ga', 'Blackwell Ultra GPU · 0');
+    buildGpu(2.18, 2.35, 'gb', 'Blackwell Ultra GPU · 1');
+
+    /* ---------- Grace CPU ---------- */
+    (function buildCpu() {
+      var g = new THREE.Group();
+      g.position.set(0, -0.55, 0.02);
+      g.scale.set(0.92, 0.92, 0.92);
+
+      var sub = box(2.62, 2.62, 0.08, mkMat('sub'), 0, 0, 0.04, g);
+      // 基板上的小元件
+      for (var i = 0; i < 8; i++) {
+        box(0.10, 0.06, 0.035, mkMat('ceramic'), -1.2 + i * 0.34, -1.22, 0.09, g);
+        box(0.10, 0.06, 0.035, mkMat('ceramic'), -1.2 + i * 0.34, 1.22, 0.09, g);
+      }
+
+      // 裸片（IHS 揭开后可见）
+      var die = box(1.82, 1.82, 0.035, mkMat('die2'), 0, 0, 0.10, g);
+
+      // IHS 顶盖
+      var ihsG = new THREE.Group(); g.add(ihsG);
+      var ihs = roundedPlate(2.06, 2.06, 0.10, 0.13, mkMat('silver'), ihsG);
+      ihs.position.set(0, 0, 0.115);
+      var ihsTop = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.0),
+        new THREE.MeshStandardMaterial({ map: TEX.ihs, color: 0x7d858f, metalness: 0.52, roughness: 0.52, envMapIntensity: 0.4 }));
+      ihsTop.position.set(0, 0, 0.272);
+      ihsG.add(ihsTop);
+      // 顶盖边框压痕
+      box(2.10, 0.035, 0.02, mkMat('silver'), 0, 0.98, 0.25, ihsG);
+      box(2.10, 0.035, 0.02, mkMat('silver'), 0, -0.98, 0.25, ihsG);
+
+      // 四周去耦电容
+      for (var k = 0; k < 7; k++) {
+        box(0.09, 0.05, 0.04, mkMat('ceramic'), -0.9 + k * 0.3, -1.36, 0.09, g);
+        box(0.09, 0.05, 0.04, mkMat('ceramic'), -0.9 + k * 0.3, 1.36, 0.09, g);
+      }
+
+      addPart('cpu', g, {
+        name: 'Grace CPU', en: 'ARM NEOVERSE V2 · 72 CORES',
+        params: [['核心', '72 × Neoverse V2'], ['内存', '480 GB LPDDR5X'], ['带宽', '512 GB/s'], ['互连', 'NVLink-C2C 900 GB/s']],
+        desc: '托盘里的主控 CPU。72 个 Arm Neoverse V2 核心通过 NVLink-C2C 与两颗 GPU 共享统一内存地址空间，让 CPU 与 GPU 之间不必来回拷贝数据。'
+      }, {
+        layers: [
+          { obj: ihsG, dz: 0.58, dy: 0.06, delay: 0.00 },
+          { obj: die, dz: 0.16, dy: 0.0, delay: 0.12 }
+        ],
+        anchor: [0, 1.55, 0.3], glowColor: 0x9fe8ff, glowSize: 3.4
+      });
+    })();
+
+    /* ---------- ConnectX-8 SuperNIC ---------- */
+    function buildNic(x, id, name) {
+      var g = new THREE.Group();
+      g.position.set(x, -3.62, 0.02);
+      g.scale.set(0.95, 0.95, 0.95);
+
+      var sub = box(1.34, 1.34, 0.07, mkMat('sub'), 0, 0, 0.035, g);
+      // 金手指（朝下的板边连接）
+      for (var i = 0; i < 18; i++) {
+        box(0.045, 0.10, 0.02, mkMat('gold'), -0.55 + i * 0.064, -0.72, 0.06, g);
+      }
+      // 中央 die
+      var die = box(0.62, 0.62, 0.08, mkMat('die2'), 0, 0.05, 0.09, g);
+      var dieTop = box(0.58, 0.58, 0.01, mkMat('die'), 0, 0.05, 0.135, g);
+
+      // 金色边框
+      var frame = framePlate(1.30, 1.30, 0.78, 0.78, 0.09, mkMat('gold'), g);
+      frame.position.set(0, 0, 0.10);
+
+      // 周边小元件
+      for (var k = 0; k < 4; k++) {
+        box(0.08, 0.06, 0.04, mkMat('ceramic'), -0.5 + k * 0.33, 0.54, 0.08, g);
+      }
+      // 侧边连接器
+      box(0.22, 0.5, 0.14, mkMat('plastic'), -0.78, -0.2, 0.10, g);
+
+      addPart(id, g, {
+        name: name, en: 'CONNECTX-8 SUPERNIC',
+        params: [['速率', '800 Gb/s'], ['总线', 'PCIe Gen 6'], ['网络', 'Spectrum-X Ethernet'], ['功能', 'RDMA / 多租户隔离']],
+        desc: '负责把托盘接进集群网络。每颗提供 800 Gb/s 吞吐，GPU 的集合通信（All-Reduce、All-to-All）经由它走以太网，而不占用 CPU。'
+      }, {
+        layers: [
+          { obj: frame, dz: 0.36, dy: 0.05, delay: 0.00 },
+          { obj: die, dz: 0.18, dy: 0.0, delay: 0.10 },
+          { obj: dieTop, dz: 0.18, dy: 0.0, delay: 0.10 }
+        ],
+        anchor: [0, 0.9, 0.25], glowColor: 0x6fe6ff, glowSize: 2.2
+      });
+    }
+    buildNic(-1.58, 'na', 'ConnectX-8 · 0');
+    buildNic(1.58, 'nb', 'ConnectX-8 · 1');
+
+    /* ---------- NVLink 连接器 ---------- */
+    (function buildNvlink() {
+      var g = new THREE.Group();
+      g.position.set(0, 5.02, 0.02);
+      [-1.42, 1.42].forEach(function (x) {
+        var c = new THREE.Group(); c.position.x = x; g.add(c);
+        // 黑色壳体
+        box(1.86, 0.72, 0.46, mkMat('plastic'), 0, 0, 0.24, c);
+        // 顶部斜切盖
+        box(1.86, 0.09, 0.50, mkMat('black'), 0, 0.38, 0.25, c);
+        // 金手指槽
+        box(1.62, 0.085, 0.03, mkMat('gold'), 0, 0.13, 0.475, c);
+        box(1.62, 0.04, 0.03, mkMat('goldD'), 0, -0.05, 0.475, c);
+        // 卡扣
+        box(0.10, 0.30, 0.30, mkMat('silver'), 0.86, -0.05, 0.18, c);
+        // 两侧导向柱
+        box(0.08, 0.52, 0.08, mkMat('silver'), -0.82, -0.02, 0.34, c);
+      });
+
+      addPart('nvl', g, {
+        name: 'NVLink 连接器', en: 'NVLink 5 · TRAY INTERCONNECT',
+        params: [['代际', 'NVLink 5'], ['单 GPU 带宽', '1.8 TB/s'], ['托盘内', '2 个连接器'], ['拓扑', '全连接 NVLink 域']],
+        desc: '托盘与 midplane 的神经接口。两颗 GPU 通过它与机柜内其余 70 颗 GPU 组成一个 72 卡的全连接 NVLink 域，跨 GPU 通信不必经过 PCIe 或网络。'
+      }, {
+        layers: [],
+        anchor: [0, 0.45, 0.3], glowColor: 0x8fe0ff, glowSize: 3.0
+      });
+    })();
+
+    /* ---------- VRM 供电阵列（实例化 + 逐颗错峰升起） ---------- */
+    (function buildVrm() {
+      var g = new THREE.Group();
+      // 用一块不可见的拾取体覆盖供电区，方便点击
+      var pick = box(1.1, 4.2, 0.30, new THREE.MeshBasicMaterial({ visible: false }), -3.95, 0.0, 0.15, g);
+      var pick2 = box(1.1, 4.2, 0.30, new THREE.MeshBasicMaterial({ visible: false }), 3.95, 0.0, 0.15, g);
+      pick.userData.pick = true; pick2.userData.pick = true;
+
+      var geo = new THREE.BoxGeometry(0.26, 0.26, 0.22);
+      var mat = mkMat('ceramic');
+      mat.color.setHex(0x24282d);
+      mat.metalness = 0.55; mat.roughness = 0.55;
+      var list = [];
+      [-1, 1].forEach(function (s) {
+        for (var i = 0; i < 9; i++) {
+          list.push([s * 3.92, 2.4 - i * 0.55]);
+          if (i < 8) list.push([s * 3.52, 2.2 - i * 0.55]);
+        }
+      });
+      // 板下沿一排
+      for (var k = 0; k < 9; k++) list.push([-2.4 + k * 0.6, -4.72]);
+
+      var inst = new THREE.InstancedMesh(geo, mat, list.length);
+      var R = rnd(7);
+      list.forEach(function (p, i) {
+        dummy.position.set(p[0], p[1], 0.19);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 0.9 + R() * 0.3);
+        dummy.updateMatrix();
+        inst.setMatrixAt(i, dummy.matrix);
+      });
+      inst.userData.base = list.map(function (p, i) {
+        return { x: p[0], y: p[1], z: 0.19, s: 0.9 + ((i * 37) % 10) / 33 };
+      });
+      g.add(inst);
+
+      var p = addPart('vrm', g, {
+        name: 'VRM 供电阵列', en: 'VOLTAGE REGULATOR MODULES',
+        params: [['输入', '48 V 直流'], ['相数', '多相 Buck'], ['负载', '≈ 1.4 kW / GPU'], ['作用', '1.0 V 级精准稳压']],
+        desc: '把 48 V 母线降到 0.8–1.0 V 的 GPU 核心电压。数十颗电感与数百颗电容紧贴封装布置，缩短供电路径以压低瞬态压降——这是 1.4 kW 级芯片能稳定运行的前提。'
+      }, {
+        layers: [], anchor: [-3.55, 1.15, 0.3], glowColor: 0xffc06a, glowSize: 2.6
+      });
+      p.inst = inst;
+      p.instBase = inst.userData.base;
+      p.instDirty = true;
+    })();
+
+    /* 部件级索引（供 HUD / 讲解引用） */
+    var ALL_IDS = ['ga', 'gb', 'cpu', 'na', 'nb', 'nvl', 'vrm'];
+
+    /* ============================================================
+       五、环境、灯光、粒子
+       ============================================================ */
+    (function env() {
+      var c = cv(1024, 512), g = c.getContext('2d');
+      var lg = g.createLinearGradient(0, 0, 0, 512);
+      lg.addColorStop(0, '#060d12');
+      lg.addColorStop(.42, '#0a161c');
+      lg.addColorStop(.52, '#18272f');
+      lg.addColorStop(.62, '#081116');
+      lg.addColorStop(1, '#03060a');
+      g.fillStyle = lg; g.fillRect(0, 0, 1024, 512);
+      // 柔光箱：给金属一条高光
+      [[220, 120, 300, 90], [700, 150, 220, 70], [500, 60, 160, 50]].forEach(function (b) {
+        var rg = g.createRadialGradient(b[0], b[1], 0, b[0], b[1], b[2]);
+        rg.addColorStop(0, 'rgba(190,220,240,.45)');
+        rg.addColorStop(.4, 'rgba(120,170,200,.10)');
+        rg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = rg;
+        g.fillRect(b[0] - b[2], b[1] - b[3], b[2] * 2, b[3] * 2);
+      });
+      var tex = new THREE.CanvasTexture(c);
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      try {
+        var pm = new THREE.PMREMGenerator(renderer);
+        pm.compileEquirectangularShader();
+        var rt = pm.fromEquirectangular(tex);
+        scene.environment = rt.texture;
+        tex.dispose(); pm.dispose();
+      } catch (e) {
+        scene.environment = tex;
+      }
+    })();
+
+    scene.add(new THREE.AmbientLight(0x2c3f4a, 0.55));
+    var key = new THREE.DirectionalLight(0xf2f8ff, 1.35); key.position.set(5, 8, 11); scene.add(key);
+    var fill = new THREE.DirectionalLight(0x7fc8ff, 0.50); fill.position.set(-8, 2, 6); scene.add(fill);
+    var rim = new THREE.DirectionalLight(0x2f7f9c, 0.65); rim.position.set(0, -6, -7); scene.add(rim);
+    var warm = new THREE.PointLight(0xffbf7a, 4.5, 26, 2); warm.position.set(0, 3.2, 7); scene.add(warm);
+
+    /* 背景网格与尘埃 */
+    var dust;
+    (function bg() {
+      var N = LOW ? 130 : 240;
+      var pos = new Float32Array(N * 3);
+      var R = rnd(5);
+      for (var i = 0; i < N; i++) {
+        pos[i * 3] = (R() - .5) * 26;
+        pos[i * 3 + 1] = (R() - .5) * 18;
+        pos[i * 3 + 2] = -3 - R() * 12;
       }
       var geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      var mat = new THREE.PointsMaterial({
-        map: glowTex, size: 0.16, sizeAttenuation: true, vertexColors: true,
-        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
-      });
-      var pts = new THREE.Points(geo, mat);
-      pts.frustumCulled = false;
-      parent.add(pts);
-      var f = { items: items, pts: pts, geo: geo, owner: owner };
-      flows.push(f);
-      return f;
-    }
-    function prepPath(pts) {
-      var seg = [0], total = 0;
-      for (var i = 1; i < pts.length; i++) {
-        total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-        seg.push(total);
-      }
-      return { pts: pts, seg: seg, total: total || 1 };
-    }
-    function samplePath(pp, u, out) {
-      var d = (((u % 1) + 1) % 1) * pp.total;
-      var i = 1;
-      while (i < pp.seg.length - 1 && pp.seg[i] < d) i++;
-      var t = (d - pp.seg[i - 1]) / ((pp.seg[i] - pp.seg[i - 1]) || 1);
-      var a = pp.pts[i - 1], b = pp.pts[i];
-      out.x = a[0] + (b[0] - a[0]) * t;
-      out.z = a[1] + (b[1] - a[1]) * t;
-    }
-    var _fo = { x: 0, z: 0 };
-    function updateFlow(f, dt) {
-      var pos = f.geo.attributes.position.array;
-      for (var i = 0; i < f.items.length; i++) {
-        var it = f.items[i];
-        it.u = (it.u + dt * it.speed) % 1;
-        var head = i * 6, tail = i * 6 + 3;
-        if (it.v) {
-          var y1 = it.a.curY + it.oa, y2 = it.b.curY + it.ob;
-          var v = Math.max(0, it.u - 0.05);
-          pos[head] = it.x; pos[head + 1] = y1 + (y2 - y1) * it.u; pos[head + 2] = it.z;
-          pos[tail] = it.x; pos[tail + 1] = y1 + (y2 - y1) * v; pos[tail + 2] = it.z;
-        } else {
-          samplePath(it.pp, it.u, _fo);
-          pos[head] = _fo.x; pos[head + 1] = it.getY() + it.dy; pos[head + 2] = _fo.z;
-          samplePath(it.pp, it.u - 0.02, _fo);
-          pos[tail] = _fo.x; pos[tail + 1] = it.getY() + it.dy; pos[tail + 2] = _fo.z;
-        }
-      }
-      f.geo.attributes.position.needsUpdate = true;
-    }
-    /** 把纹理路径抽样成脉冲项 */
-    function pushPathItems(items, paths, texSize, W, D, count, getY, dy, warm) {
-      var step = Math.max(1, Math.floor(paths.length / count));
-      var got = 0;
-      for (var i = 0; i < paths.length && got < count; i += step) {
-        var p = paths[i];
-        if (!p[2] || p[2].length < 3) continue;
-        var pts = p[2].map(function (q) {
-          return [(q[0] / texSize - 0.5) * W, (q[1] / texSize - 0.5) * D];
-        });
-        items.push({
-          pp: prepPath(pts), u: Math.random(), speed: 0.05 + Math.random() * 0.07,
-          getY: getY, dy: dy, warm: warm
-        });
-        got++;
-      }
-      return items;
-    }
-
-    /* ---- 宏观：GPU（B200，CoWoS-L 双 die + 8 HBM） ---- */
-    function buildMacroGPU() {
-      var layers = [];
-      var SUB_W = 10.6, SUB_D = 7.8;
-      var DIE_W = 3.3, DIE_D = 4.6, DIE_CX = 1.7;
-
-      var Lpins = newLayer({ id: 'pins', name: 'BGA 锡球', en: 'BALL GRID ARRAY', y0: -0.315, dy: -1.5, xw: 10.6,
-        note: '近千颗锡球把整颗芯片焊装到主板上，同时承担全部供电与对外信号。' }, macroRoot);
-      layers.push(Lpins);
-      (function () {
-        var pitch = LOW ? 0.5 : 0.3, items = [];
-        for (var ix = -5.1; ix <= 5.08; ix += pitch) for (var iz = -3.6; iz <= 3.58; iz += pitch) items.push([ix, iz]);
-        addPads(Lpins, items, ballGeo, new THREE.MeshStandardMaterial({
-          color: PAL.ball, roughness: 0.32, metalness: 0.85
-        }), [0.09, 0.08, 0.09]);
-        Lpins.count = items.length;
-      })();
-
-      var Lsub = newLayer({ id: 'sub', name: '封装基板', en: 'ABF SUBSTRATE', y0: 0, dy: 0, xw: 10.6,
-        note: 'ABF 积层基板把锡球阵列扇出转换到裸片间距，走线宽径已做到 2 µm 级。' }, macroRoot);
-      layers.push(Lsub);
-      var subTex = mkTraceTex({ seed: 11, density: 0.8, pads: true, grid: 64 });
-      TEXS.push(subTex.tex);
-      addPlate(Lsub, SUB_W, SUB_D, 0.22, -0.11, subTex, { glow: 0.16 });
-
-      var Lintp = newLayer({ id: 'intp', name: '硅中介层', en: 'CoWoS-L INTERPOSER', y0: 0, dy: 1.25, xw: 9.7,
-        note: '一整片晶圆级硅中介层：裸片之间 10 TB/s 的互连在它上面走线，硅通孔垂直穿过。' }, macroRoot);
-      layers.push(Lintp);
-      var intpTex = mkTraceTex({ seed: 23, density: 1.35, grid: 80, bg: '#0a1723' });
-      TEXS.push(intpTex.tex);
-      addPlate(Lintp, 9.7, 6.4, 0.10, 0.05, intpTex, { col: PAL.si, glow: 0.24 });
-
-      var Ldie = newLayer({ id: 'die', name: '裸片 · 功能区块', en: 'DIE · GPC / L2 / PHY', y0: 0.12, dy: 2.5, xw: 7.4,
-        note: '两颗计算裸片各含 8 组 GPC 与 L2 缓存切片；内侧是 NV-HBI，外侧面向 HBM PHY。' }, macroRoot);
-      layers.push(Ldie);
-      (function () {
-        var list = [];
-        for (var di = 0; di < 2; di++) {
-          var cx = di === 0 ? -DIE_CX : DIE_CX;
-          list.push({ x: cx, z: 0, w: DIE_W, d: DIE_D, h: 0.10, col: PAL.dieslab, kind: 'slab', y: 0, noPick: true });
-          for (var r = 0; r < 2; r++) for (var c = 0; c < 4; c++) {
-            list.push({
-              x: cx + (c - 1.5) * 0.82, z: -1.08 + r * 2.16, w: 0.76, d: 1.58, h: 0.12,
-              col: PAL.gpc, kind: 'gpc', y: 0.10,
-              name: 'GPC ' + pad2(di * 8 + r * 4 + c), sub: '8 SM · ' + (di === 0 ? 'die A' : 'die B'),
-              info: '图形处理簇：每组含 8 个 SM，128 个 FP32 通道与 4 个张量核。'
-            });
-          }
-          for (var s2 = 0; s2 < 8; s2++) {
-            list.push({
-              x: cx + (s2 - 3.5) * 0.40, z: 2.06, w: 0.36, d: 0.30, h: 0.07,
-              col: PAL.l2, kind: 'l2', y: 0.10,
-              name: 'L2 切片 ' + pad2(di * 8 + s2), sub: '共享缓存 · 分片寻址',
-              info: 'L2 缓存按切片分布，全部切片组成统一地址空间。'
-            });
-          }
-          for (var k = 0; k < 4; k++) {
-            list.push({
-              x: cx + (di === 0 ? -1.70 : 1.70), z: (k - 1.5) * 0.92, w: 0.12, d: 0.58, h: 0.06,
-              col: PAL.phy, kind: 'phy', y: 0.10,
-              name: 'HBM PHY ' + pad2(di * 4 + k), sub: '2048-bit 接口',
-              info: '显存物理层：每组 PHY 以 2048-bit 总线对接一侧的 HBM3e 堆叠。'
-            });
-          }
-          list.push({
-            x: cx + (di === 0 ? 1.70 : -1.70), z: 0, w: 0.14, d: 4.30, h: 0.06,
-            col: PAL.warm, kind: 'hbi', y: 0.10,
-            name: 'NV-HBI', sub: 'die 间互连 · 10 TB/s',
-            info: '两颗裸片之间的高速互连总线，让双 die 对外呈现为一颗逻辑 GPU。'
-          });
-          list.push({
-            x: cx, z: -2.12, w: 2.6, d: 0.24, h: 0.05, col: PAL.io, kind: 'io', y: 0.10,
-            name: 'PCIe 6.0 PHY', sub: '主机接口', info: '对外的 PCIe 6.0 与 NVLink 边带接口。'
-          });
-        }
-        addBlocks(Ldie, list, { pick: { view: 'macro', chip: 'gpu' } });
-      })();
-
-      var Lhbm = newLayer({ id: 'hbm', name: 'HBM3e 堆叠', en: '3D DRAM STACK', y0: 0.12, dy: 2.5, xw: 9.6,
-        note: '8 组 HBM3e：每层 DRAM 以微凸块垂直堆叠，经 TSV 引到基逻辑裸片。' }, macroRoot);
-      layers.push(Lhbm);
-      (function () {
-        var list = [];
-        for (var sd = 0; sd < 8; sd++) {
-          var hx = (sd < 4 ? -4.1 : 4.1), hz = (sd % 4 - 1.5) * 1.45;
-          list.push({ x: hx, z: hz, w: 1.30, d: 1.30, h: 0.08, col: PAL.dramBase, kind: 'drambase', y: 0, noPick: true });
-          for (var ly = 0; ly < 8; ly++) {
-            var first = (sd === 0 && ly === 0);
-            list.push({
-              x: hx, z: hz, w: 1.22 - ly * 0.012, d: 1.22 - ly * 0.012, h: 0.055,
-              col: PAL.dram, kind: 'dram', y: 0.08 + ly * 0.078,
-              name: first ? 'HBM3e 堆叠' : '', noPick: !first, sub: '12-hi · 24 GB',
-              info: '8 层 DRAM 堆叠 + 1 层基逻辑裸片，层间以微凸块与 TSV 垂直互连，单组 24 GB。'
-            });
-          }
-        }
-        addBlocks(Lhbm, list, { edgeOp: 0.14 });
-      })();
-
-      /* TSV：基板 → 中介层 */
-      (function () {
-        var pitch = LOW ? 0.62 : 0.42, items = [];
-        for (var ix = -4.4; ix <= 4.4; ix += pitch) for (var iz = -2.9; iz <= 2.9; iz += pitch) items.push([ix, iz]);
-        addLinks('macro', 'gpumacro', Lsub, Lintp, items, { r: 0.03, col: 0x3a7d99 });
-      })();
-      /* 微凸块：中介层 → 裸片 / HBM */
-      (function () {
-        var pitch = LOW ? 0.34 : 0.2, items = [], hitems = [];
-        for (var di = 0; di < 2; di++) {
-          var cx = di === 0 ? -DIE_CX : DIE_CX;
-          for (var ix = -DIE_W / 2 + 0.1; ix < DIE_W / 2 - 0.05; ix += pitch)
-            for (var iz = -DIE_D / 2 + 0.1; iz < DIE_D / 2 - 0.05; iz += pitch) items.push([cx + ix, iz]);
-        }
-        for (var sd = 0; sd < 8; sd++) {
-          var hx = (sd < 4 ? -4.1 : 4.1), hz = (sd % 4 - 1.5) * 1.45;
-          for (var bx = -0.5; bx <= 0.5; bx += 0.25) for (var bz = -0.5; bz <= 0.5; bz += 0.25) hitems.push([hx + bx, hz + bz]);
-        }
-        addLinks('macro', 'gpumacro', Lintp, Ldie, items, { r: 0.035, col: 0x56b8d4 });
-        addLinks('macro', 'gpumacro', Lintp, Lhbm, hitems, { r: 0.035, col: 0x56b8d4 });
-      })();
-
-      /* 脉冲 */
-      (function () {
-        var items = [];
-        pushPathItems(items, subTex.paths, 1024, SUB_W, SUB_D, LOW ? 26 : 46,
-          function () { return Lsub.curY; }, 0.01);
-        pushPathItems(items, intpTex.paths, 1024, 9.7, 6.4, LOW ? 30 : 54,
-          function () { return Lintp.curY; }, 0.11);
-        for (var i = 0; i < (LOW ? 16 : 34); i++) {
-          items.push({ v: true, x: (Math.random() - 0.5) * 8.6, z: (Math.random() - 0.5) * 5.6,
-            a: Lsub, b: Lintp, oa: 0, ob: 0, u: Math.random(), speed: 0.25 + Math.random() * 0.3 });
-        }
-        makeFlow(items, macroRoot, 'gpumacro');
-      })();
-
-      allLayers.gpu = layers;
-    }
-
-    /* ---- 宏观：CPU（IOD + 12 CCD chiplet） ---- */
-    function buildMacroCPU() {
-      var layers = [];
-      var SUB_W = 9.8, SUB_D = 8.6;
-
-      var Lpins = newLayer({ id: 'pins', name: 'LGA 触点', en: 'LAND GRID ARRAY', y0: -0.245, dy: -1.5, xw: 9.8,
-        note: 'LGA 平面触点阵列：插座弹簧针压在焊盘上完成连接，耐插拔次数远高于针脚式封装。' }, macroRoot);
-      layers.push(Lpins);
-      (function () {
-        var pitch = LOW ? 0.44 : 0.26, items = [];
-        for (var ix = -4.6; ix <= 4.58; ix += pitch) for (var iz = -4.0; iz <= 3.98; iz += pitch) items.push([ix, iz]);
-        addPads(Lpins, items, boxGeo, new THREE.MeshStandardMaterial({
-          color: 0xb9c4cc, roughness: 0.3, metalness: 0.9
-        }), [0.14, 0.026, 0.14]);
-        Lpins.count = items.length;
-      })();
-
-      var Lsub = newLayer({ id: 'sub', name: '封装基板', en: 'ABF SUBSTRATE', y0: 0, dy: 0, xw: 9.8,
-        note: '有机基板承担 13 颗 chiplet 之间的全部扇出布线，是芯片上走线最长的一层。' }, macroRoot);
-      layers.push(Lsub);
-      var subTex = mkTraceTex({ seed: 37, density: 0.85, pads: true, grid: 64 });
-      TEXS.push(subTex.tex);
-      addPlate(Lsub, SUB_W, SUB_D, 0.22, -0.11, subTex, { glow: 0.16 });
-
-      var Lrdl = newLayer({ id: 'rdl', name: 'RDL 布线层', en: 'REDISTRIBUTION LAYER', y0: 0, dy: 1.15, xw: 9.2,
-        note: '再分布层把基板焊盘映射到 chiplet 焊区，相当于封装内的最后一层"主板"。' }, macroRoot);
-      layers.push(Lrdl);
-      var rdlTex = mkTraceTex({ seed: 51, density: 1.25, grid: 76, bg: '#0a1622' });
-      TEXS.push(rdlTex.tex);
-      addPlate(Lrdl, 9.2, 8.0, 0.055, 0.028, rdlTex, { col: 0x0f2334, glow: 0.24 });
-
-      var Ldie = newLayer({ id: 'die', name: 'chiplet 阵列', en: 'IOD + 12 CCD', y0: 0.14, dy: 2.4, xw: 8.6,
-        note: '中央 IOD 负责 12 通道 DDR5 与 PCIe；两侧 12 颗 CCD 各含 16 个 Zen 5c 核心。' }, macroRoot);
-      layers.push(Ldie);
-      (function () {
-        var list = [];
-        list.push({ x: 0, z: 0, w: 1.9, d: 6.6, h: 0.10, col: PAL.iod, kind: 'iod', y: 0,
-          name: 'IOD', sub: '12nm · 内存 / PCIe 控制器',
-          info: '输入输出裸片：12 通道 DDR5-6000、128 条 PCIe 5.0 lane 与 Infinity Fabric 互连。' });
-        for (var m = 0; m < 6; m++) {
-          list.push({ x: -0.55, z: -2.4 + m * 0.96, w: 0.62, d: 0.24, h: 0.05, col: PAL.phy, kind: 'phy', y: 0.10,
-            name: m === 0 ? 'DDR5 PHY' : '', noPick: m > 0, sub: '每颗带 2 通道',
-            info: 'DDR5 物理接口：两侧对称布置，共 12 通道内存控制器。' });
-          list.push({ x: 0.55, z: -2.4 + m * 0.96, w: 0.62, d: 0.24, h: 0.05, col: PAL.phy, kind: 'phy', y: 0.10, noPick: true });
-        }
-        list.push({ x: 0, z: 2.92, w: 0.9, d: 0.5, h: 0.07, col: PAL.warm, kind: 'pcie', y: 0.10,
-          name: 'PCIe 5.0', sub: '128 lane', info: 'PCIe 5.0 控制器簇，128 条 lane 直出插槽。' });
-        for (var col = 0; col < 2; col++) {
-          for (var row = 0; row < 6; row++) {
-            var cx = col === 0 ? -2.05 : 2.05, cz = (row - 2.5) * 1.06;
-            var firstCcd = (col === 0 && row === 0);
-            list.push({ x: cx, z: cz, w: 1.62, d: 0.94, h: 0.12, col: PAL.ccd, kind: 'ccd', y: 0,
-              name: firstCcd ? 'CCD 计算裸片' : '', noPick: !firstCcd, sub: '3nm · 16 核 · 32 MB L3',
-              info: '每颗 CCD 含 2 个 CCX、16 个 Zen 5c 核心与 32 MB L3 缓存。' });
-            for (var c2 = 0; c2 < 8; c2++) for (var r2 = 0; r2 < 2; r2++) {
-              var firstCore = firstCcd && c2 === 0 && r2 === 0;
-              list.push({
-                x: cx + (c2 - 3.5) * 0.18, z: cz + (r2 - 0.5) * 0.40, w: 0.15, d: 0.32, h: 0.07,
-                col: PAL.core, kind: 'core', y: 0.12,
-                name: firstCore ? 'Zen 5c 核心' : '', noPick: !firstCore,
-                sub: '共 192 核 · 384 线程',
-                info: 'Zen 5c 密集核心：与标准 Zen 5 同 IPC，牺牲部分缓存容量换取密度。'
-              });
-            }
-          }
-        }
-        addBlocks(Ldie, list, { pick: { view: 'macro', chip: 'cpu' } });
-      })();
-
-      /* 微凸块：RDL → chiplet；基板垂直过孔：基板 → RDL */
-      (function () {
-        var pitch = LOW ? 0.3 : 0.2, items = [];
-        for (var ix = -0.85; ix <= 0.85; ix += pitch) for (var iz = -3.2; iz <= 3.2; iz += pitch) items.push([ix, iz]);
-        for (var col = 0; col < 2; col++) for (var row = 0; row < 6; row++) {
-          var cx = col === 0 ? -2.05 : 2.05, cz = (row - 2.5) * 1.06;
-          for (var bx = -0.68; bx <= 0.68; bx += pitch) for (var bz = -0.36; bz <= 0.36; bz += pitch) items.push([cx + bx, cz + bz]);
-        }
-        addLinks('macro', 'cpumacro', Lrdl, Ldie, items, { r: 0.032, col: 0x56b8d4 });
-        var p2 = LOW ? 0.6 : 0.42, it2 = [];
-        for (ix = -4.2; ix <= 4.2; ix += p2) for (var iz = -3.6; iz <= 3.6; iz += p2) it2.push([ix, iz]);
-        addLinks('macro', 'cpumacro', Lsub, Lrdl, it2, { r: 0.026, col: 0x3a7d99 });
-      })();
-
-      /* 脉冲 */
-      (function () {
-        var items = [];
-        pushPathItems(items, subTex.paths, 1024, SUB_W, SUB_D, LOW ? 28 : 48,
-          function () { return Lsub.curY; }, 0.01);
-        pushPathItems(items, rdlTex.paths, 1024, 9.2, 8.0, LOW ? 24 : 42,
-          function () { return Lrdl.curY; }, 0.06);
-        for (var i = 0; i < (LOW ? 14 : 30); i++) {
-          items.push({ v: true, x: (Math.random() - 0.5) * 8.4, z: (Math.random() - 0.5) * 6.8,
-            a: Lsub, b: Lrdl, oa: 0, ob: 0, u: Math.random(), speed: 0.25 + Math.random() * 0.3 });
-        }
-        makeFlow(items, macroRoot, 'cpumacro');
-      })();
-
-      allLayers.cpu = layers;
-    }
-
-    /* ---- 微观：单元 BEOL 剖面 ---- */
-    function buildMicro(chipKey) {
-      var layers = [];
-      var U = 3.1;
-      var isGpu = chipKey === 'gpu';
-      var tag = chipKey + 'micro';
-
-      var Lfin = newLayer({ id: 'fin', name: '硅基底 · FinFET', en: 'FINFET ARRAY', y0: 0, dy: -0.55, xw: 3.1,
-        note: '晶体管层：电流沿竖直的鳍流动，栅极包住鳍的三面，把漏电压到最低。' }, microRoot);
-      layers.push(Lfin);
-      (function () {
-        var slab = new THREE.Mesh(new THREE.BoxGeometry(U, 0.10, U), plateMat(PAL.si, 0.7));
-        slab.position.y = 0.05;
-        Lfin.group.add(slab);
-        var finList = [], nFin = LOW ? 44 : 64;
-        for (var i = 0; i < nFin; i++) {
-          finList.push({ x: 0, z: (i - (nFin - 1) / 2) * (2.9 / nFin), w: 2.9, d: 0.024, h: 0.055, col: PAL.fin, y: 0.10, noPick: true });
-        }
-        addBlocks(Lfin, finList, { noEdge: true });
-        var gateList = [], nGate = 22;
-        for (var g = 0; g < nGate; g++) {
-          gateList.push({ x: (g - (nGate - 1) / 2) * 0.132, z: 0, w: 0.045, d: U - 0.08, h: 0.075, col: PAL.gate, y: 0.12, noPick: true });
-        }
-        var gm = new THREE.InstancedMesh(boxGeo, new THREE.MeshStandardMaterial({
-          color: PAL.gate, roughness: 0.4, metalness: 0.5, emissive: 0x0e2c3c, emissiveIntensity: 0.4
-        }), gateList.length);
-        gm.frustumCulled = false;
-        gateList.forEach(function (b, i) {
-          _p.set(b.x, b.y + b.h / 2, b.z); _s.set(b.w, b.h, b.d);
-          _m4.compose(_p, _q0, _s); gm.setMatrixAt(i, _m4);
-        });
-        gm.instanceMatrix.needsUpdate = true;
-        Lfin.group.add(gm);
-      })();
-
-      function metalLayer(id, name, en, note, y0, dy, texOpt) {
-        var L = newLayer({ id: id, name: name, en: en, note: note, y0: y0, dy: dy, xw: U }, microRoot);
-        layers.push(L);
-        var tex = mkTraceTex(texOpt);
-        TEXS.push(tex.tex);
-        addPlate(L, U, U, 0.03, 0.015, tex, { col: 0x12283a, glow: id === 'm1' ? 0.3 : 0.22 });
-        L.flowPaths = tex.paths;
-        L.texSize = texOpt.size || 1024;
-        return L;
-      }
-      var Lm1 = metalLayer('m1', '金属层 M1', 'M1 · LOCAL INTERCONNECT',
-        '最细的一层金属：节距几十纳米，单元内部的局部互连全在这一层完成。', 0.20, 0.5,
-        { seed: isGpu ? 61 : 63, density: 1.6, grid: 90, size: 768, bg: '#0a1622' });
-      var Lm2 = metalLayer('m2', '金属层 M2', 'M2 · INTERMEDIATE',
-        '中间层：线宽放宽一档，承担单元与单元之间的信号传输。', 0.30, 1.05,
-        { seed: isGpu ? 71 : 73, density: 1.0, grid: 64, size: 768, bg: '#0a1520' });
-      var Lm3 = metalLayer('m3', '金属层 M3', 'M3 · GLOBAL ROUTING',
-        '全局布线层：最宽的金属线，时钟与电源主干从这里横穿整个单元。', 0.40, 1.6,
-        { seed: isGpu ? 81 : 83, density: 0.55, grid: 44, size: 768, bg: '#091420' });
-
-      var Lblk = newLayer({
-        id: 'blk', name: isGpu ? '单元分区 · SM' : '单元分区 · Zen 5c', en: 'UNIT FLOORPLAN',
-        y0: 0.52, dy: 2.2, xw: U,
-        note: isGpu ? '一个 SM 拆成 4 个 SMSP 处理块，中间是 256 KB 的 L1 / 共享内存。'
-                    : '一个 Zen 5c 核心自上而下：前端解码 → 整数 / 存取 → 浮点 FMA → 1 MB L2。'
-      }, microRoot);
-      layers.push(Lblk);
-      (function () {
-        var list = [];
-        if (isGpu) {
-          for (var qx = 0; qx < 2; qx++) for (var qz = 0; qz < 2; qz++) {
-            var cx = qx === 0 ? -0.80 : 0.80, cz = qz === 0 ? -0.80 : 0.80, f = (qx === 0 && qz === 0);
-            list.push({ x: cx, z: cz, w: 1.34, d: 1.34, h: 0.07, col: PAL.smsp, kind: 'smsp', y: 0,
-              name: f ? 'SMSP 处理块' : '', noPick: !f, sub: '32 FP32 + 1 张量核',
-              info: 'SM 的四分之一：32 个 FP32 通道、1 个张量核、warp 调度器与寄存器堆 bank。' });
-            for (var l = 0; l < 16; l++) {
-              list.push({ x: cx - 0.56 + l * 0.075, z: cz - 0.40, w: 0.05, d: 0.16, h: 0.05, col: PAL.lane, y: 0.07, noPick: true });
-              list.push({ x: cx - 0.56 + l * 0.075, z: cz + 0.40, w: 0.05, d: 0.16, h: 0.05, col: PAL.lane, y: 0.07, noPick: true });
-            }
-            list.push({ x: cx, z: cz, w: 0.26, d: 0.26, h: 0.09, col: PAL.warm, kind: 'tensor', y: 0.07,
-              name: f ? '张量核' : '', noPick: !f, sub: '第 5 代 · FP4 / FP8',
-              info: '张量核执行矩阵乘加，是神经网络训练与推理的主力单元。' });
-            [-0.30, 0.30].forEach(function (ox) {
-              [-0.60, 0.60].forEach(function (oz) {
-                list.push({ x: cx + ox, z: cz + oz, w: 0.5, d: 0.10, h: 0.05, col: PAL.reg, y: 0.07, noPick: true });
-              });
-            });
-          }
-          list.push({ x: 0, z: 0, w: 2.0, d: 0.60, h: 0.06, col: PAL.l1, kind: 'l1', y: 0,
-            name: 'L1 / 共享内存', sub: '256 KB',
-            info: '四个 SMSP 共享的 L1 数据缓存与可编程共享内存，SM 内通信延迟极低。' });
-        } else {
-          list.push({ x: -1.05, z: -1.18, w: 0.78, d: 0.50, h: 0.07, col: PAL.fe, kind: 'fe', y: 0,
-            name: '取指 / L1I', sub: '32 KB', info: '指令缓存与取指单元，每周期取 32 字节。' });
-          list.push({ x: 0.15, z: -1.18, w: 1.30, d: 0.50, h: 0.07, col: PAL.fe, kind: 'fe2', y: 0,
-            name: '解码 · 8-wide', sub: '每周期 8 条指令', info: '8 宽解码前端，把 x86 指令译码为微操作。' });
-          list.push({ x: 1.20, z: -1.18, w: 0.60, d: 0.50, h: 0.07, col: PAL.fe, kind: 'fe3', y: 0,
-            name: '分支预测', sub: 'TAGE 预测器', info: 'TAGE 结构的分支预测，错误预测的代价高达十几个周期。' });
-          list.push({ x: -0.42, z: -0.35, w: 1.9, d: 0.75, h: 0.07, col: PAL.alu, kind: 'alu', y: 0,
-            name: '整数执行', sub: '6 × ALU', info: '6 个整数 ALU，每周期最多执行 6 条整数运算。' });
-          for (var a = 0; a < 6; a++) list.push({ x: -1.22 + a * 0.32, z: -0.35, w: 0.24, d: 0.5, h: 0.10, col: 0x6fe2f2, y: 0.07, noPick: true });
-          list.push({ x: 1.05, z: -0.35, w: 0.85, d: 0.75, h: 0.07, col: PAL.agu, kind: 'agu', y: 0,
-            name: 'AGU 存取', sub: '2 × load / store', info: '地址生成单元：计算访存地址并发射加载 / 存储。' });
-          list.push({ x: -0.60, z: 0.45, w: 1.55, d: 0.75, h: 0.07, col: PAL.fpu, kind: 'fpu', y: 0,
-            name: '浮点 FMA', sub: '2 × 512-bit', info: '两条 512-bit FMA 流水线，AVX-512 全宽执行。' });
-          for (var f2 = 0; f2 < 2; f2++) list.push({ x: -1.2 + f2 * 1.2, z: 0.45, w: 0.9, d: 0.5, h: 0.10, col: 0x6fa8f2, y: 0.07, noPick: true });
-          list.push({ x: 0.95, z: 0.45, w: 1.10, d: 0.75, h: 0.07, col: PAL.l1d, kind: 'l1d', y: 0,
-            name: 'L1D 数据缓存', sub: '48 KB', info: '48 KB 的 L1 数据缓存，读取延迟约 4 个周期。' });
-          list.push({ x: 0, z: 1.22, w: 2.9, d: 0.42, h: 0.06, col: PAL.l1, kind: 'l2', y: 0,
-            name: 'L2 缓存', sub: '1 MB · 17 周期', info: '每核心私有 1 MB L2，是核内最后一级私有缓存。' });
-        }
-        addBlocks(Lblk, list, { pick: { view: 'micro', chip: chipKey } });
-      })();
-
-      /* 层间过孔 */
-      (function () {
-        var p1 = LOW ? 0.22 : 0.115, items1 = [];
-        for (var ix = -1.4; ix <= 1.4; ix += p1) for (var iz = -1.4; iz <= 1.4; iz += p1) items1.push([ix, iz]);
-        addLinks('micro', tag, Lfin, Lm1, items1, { r: 0.014, oa: 0.155, col: 0x4a8aa6 });
-        var p2 = LOW ? 0.3 : 0.165, items2 = [];
-        for (ix = -1.35; ix <= 1.35; ix += p2) for (iz = -1.35; iz <= 1.35; iz += p2) items2.push([ix, iz]);
-        addLinks('micro', tag, Lm1, Lm2, items2, { r: 0.02, oa: 0.03, col: 0x4a8aa6 });
-        var p3 = LOW ? 0.5 : 0.3, items3 = [];
-        for (ix = -1.3; ix <= 1.3; ix += p3) for (iz = -1.3; iz <= 1.3; iz += p3) items3.push([ix, iz]);
-        addLinks('micro', tag, Lm2, Lm3, items3, { r: 0.028, oa: 0.03, col: 0x4a8aa6 });
-      })();
-
-      /* 脉冲 */
-      (function () {
-        var items = [];
-        pushPathItems(items, Lm1.flowPaths, Lm1.texSize, U, U, LOW ? 22 : 40, function () { return Lm1.curY; }, 0.04);
-        pushPathItems(items, Lm2.flowPaths, Lm2.texSize, U, U, LOW ? 16 : 30, function () { return Lm2.curY; }, 0.04);
-        pushPathItems(items, Lm3.flowPaths, Lm3.texSize, U, U, LOW ? 10 : 18, function () { return Lm3.curY; }, 0.04);
-        for (var i = 0; i < (LOW ? 10 : 22); i++) {
-          items.push({ v: true, x: (Math.random() - 0.5) * 2.6, z: (Math.random() - 0.5) * 2.6,
-            a: Lm1, b: Lm2, oa: 0.03, ob: 0, u: Math.random(), speed: 0.3 + Math.random() * 0.35 });
-        }
-        makeFlow(items, microRoot, tag);
-      })();
-
-      microLayers[chipKey] = layers;
-    }
-
-    buildMacroGPU();
-    buildMacroCPU();
-    buildMicro('gpu');
-    buildMicro('cpu');
-
-    /* 裸片底部的呼吸辉光 */
-    var floorGlows = {};
-    ['gpu', 'cpu'].forEach(function (k) {
-      var m = new THREE.MeshBasicMaterial({
-        map: mkFloorTex(), transparent: true, opacity: 0.16,
-        blending: THREE.AdditiveBlending, depthWrite: false, color: 0x66d8f0
-      });
-      TEXS.push(m.map);
-      var mesh = new THREE.Mesh(new THREE.PlaneGeometry(11.5, 9.5), m);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.y = -0.02;
-      var dieLayer = (k === 'gpu' ? allLayers.gpu : allLayers.cpu)[3];
-      dieLayer.group.add(mesh);
-      floorGlows[k] = m;
-    });
+      var mat = new THREE.PointsMaterial({ color: 0x5f9fb8, size: 0.035, transparent: true, opacity: 0.5, depthWrite: false });
+      dust = new THREE.Points(geo, mat);
+      scene.add(dust);
+    })();
 
     /* ============================================================
        六、HUD
@@ -943,521 +819,456 @@ HL.registerScene({
     var hud = document.createElement('div');
     hud.className = 'chip-hud';
     hud.innerHTML =
-      '<div class="cp-grid"></div>' +
-      '<div class="cp-top"><span class="cp-logo">SILICON<em>·</em>STACK</span>' +
-      '<span class="cp-sub" id="cpSub"></span></div>' +
-      '<div class="cp-kpi" id="cpKpi"></div>' +
-      '<div class="cp-hint" id="cpHint"></div>' +
-      '<div class="cp-stack" id="cpStack"></div>' +
-      '<div class="cp-xsec"><h4>侧视剖面<b>SECTION</b></h4><canvas id="cpXsec" width="304" height="280"></canvas></div>' +
-      '<div class="cp-toggle" id="cpToggle">' +
-      '<button data-v="macro">宏观 · 封装堆叠</button><button data-v="micro">微观 · 单元内部</button></div>' +
-      '<div class="cp-card" id="cpCard"></div>' +
-      '<div class="cp-labels" id="cpLabels"></div>' +
-      '<div class="cp-flash" id="cpFlash"></div>';
-    stageEl.appendChild(hud);
+      '<div class="ck-grid"></div><div class="ck-vig"></div>' +
+      '<div class="ck-top"><span class="ck-logo">GB300<em>·</em>TRAY</span>' +
+      '<span class="ck-sub" id="ckSub">NVIDIA GB300 NVL72 · COMPUTE TRAY</span></div>' +
 
-    var elKpi = hud.querySelector('#cpKpi'), elStack = hud.querySelector('#cpStack');
-    var elCard = hud.querySelector('#cpCard'), elSub = hud.querySelector('#cpSub');
-    var elHint = hud.querySelector('#cpHint'), elFlash = hud.querySelector('#cpFlash');
-    var elLabels = hud.querySelector('#cpLabels');
-    var elToggle = hud.querySelector('#cpToggle');
-    var btnToggle = elToggle.querySelectorAll('button');
-    var xsecCv = hud.querySelector('#cpXsec');
+      '<div class="ck-hint" id="ckHint">拖动旋转 · 滚轮缩放 · 点击部件拆解</div>' +
+      '<div class="ck-list" id="ckList"></div>' +
+      '<div class="ck-card" id="ckCard"></div>' +
+      '<div class="ck-labels" id="ckLabels"></div>' +
+      '<div class="ck-flash" id="ckFlash"></div>';
+    stage.appendChild(hud);
 
-    /* 3D 标注 */
-    var labelDefs = [];
-    (function () {
-      function anchor(group, x, y, z) {
-        var o = new THREE.Object3D(); o.position.set(x, y, z); group.add(o); return o;
-      }
-      function add(view, chip, obj, text, sub) {
-        var el = document.createElement('div');
-        el.className = 'cp-ld';
-        el.innerHTML = '<svg width="60" height="60"><line x1="0" y1="0" x2="34" y2="-30"/>' +
-          '<circle cx="0" cy="0" r="2.2"/></svg>' +
-          '<span class="cp-lb">' + text + (sub ? ' <b>' + sub + '</b>' : '') + '</span>';
-        elLabels.appendChild(el);
-        labelDefs.push({ view: view, chip: chip, obj: obj, el: el });
-      }
-      var gl = allLayers.gpu, cl = allLayers.cpu;
-      add('macro', 'gpu', anchor(gl[3].group, 0, 0.35, -2.32), '裸片 · GPC × 16', '2 die');
-      add('macro', 'gpu', anchor(gl[4].group, -4.1, 0.85, 1.45), 'HBM3e', '8 × 24 GB');
-      add('macro', 'gpu', anchor(gl[2].group, -4.6, 0.12, 0), '硅中介层', 'CoWoS-L');
-      add('macro', 'gpu', anchor(gl[0].group, 5.0, 0, 3.4), 'BGA 锡球', '×' + gl[0].count);
-      add('macro', 'gpu', anchor(gl[3].group, 2.9, 0.28, 0), 'NV-HBI', '10 TB/s');
-      add('macro', 'cpu', anchor(cl[3].group, 0, 0.2, 0), 'IOD', '12nm');
-      add('macro', 'cpu', anchor(cl[3].group, 2.05, 0.28, -2.6), 'CCD × 12', 'Zen 5c');
-      add('macro', 'cpu', anchor(cl[0].group, 4.4, 0, 3.8), 'LGA 触点', '×' + cl[0].count);
-      add('macro', 'cpu', anchor(cl[2].group, 4.3, 0.08, -3.8), 'RDL 布线层', '');
-      var mg = microLayers.gpu, mc = microLayers.cpu;
-      add('micro', 'gpu', anchor(mg[0].group, -1.2, 0.2, 1.2), 'FinFET 阵列', '鳍式晶体管');
-      add('micro', 'gpu', anchor(mg[1].group, 1.3, 0.05, -1.3), 'M1', '局部互连');
-      add('micro', 'gpu', anchor(mg[3].group, -1.3, 0.05, 1.3), 'M3', '全局布线');
-      add('micro', 'gpu', anchor(mg[4].group, 0, 0.18, 0), 'SM · 单元分区', '4 SMSP');
-      add('micro', 'cpu', anchor(mc[0].group, -1.2, 0.2, 1.2), 'FinFET 阵列', '');
-      add('micro', 'cpu', anchor(mc[3].group, -1.3, 0.05, 1.3), 'M3', '全局布线');
-      add('micro', 'cpu', anchor(mc[4].group, 0, 0.18, 0), 'Zen 5c · 单元分区', '6 ALU');
-    })();
+    var elList = hud.querySelector('#ckList');
+    var elCard = hud.querySelector('#ckCard');
+    var elLabels = hud.querySelector('#ckLabels');
+    var elFlash = hud.querySelector('#ckFlash');
+    var elHint = hud.querySelector('#ckHint');
+    var elSub = hud.querySelector('#ckSub');
 
-    var _pv = new THREE.Vector3();
-    function updateLabels(w, h) {
-      var show = P.labels && w >= 900;
-      for (var i = 0; i < labelDefs.length; i++) {
-        var L = labelDefs[i];
-        if (!show || P.view !== L.view || P.chip !== L.chip) { L.el.style.display = 'none'; continue; }
-        L.obj.getWorldPosition(_pv);
-        _pv.project(camera);
-        if (_pv.z > 1 || _pv.z < -1) { L.el.style.display = 'none'; continue; }
-        var sx = (_pv.x * 0.5 + 0.5) * w, sy = (-_pv.y * 0.5 + 0.5) * h;
-        if (sx < 60 || sx > w - 60 || sy < 60 || sy > h - 60) { L.el.style.display = 'none'; continue; }
-        L.el.style.display = 'block';
-        L.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px)';
-      }
-    }
-
-    /* 侧视剖面小图 */
-    var xsecKey = '';
-    function drawXsec() {
-      var layers = P.view === 'macro' ? allLayers[P.chip] : microLayers[P.chip];
-      var key = P.view + P.chip + curE.toFixed(3);
-      if (key === xsecKey) return;
-      xsecKey = key;
-      var c = xsecCv.getContext('2d');
-      c.setTransform(2, 0, 0, 2, 0, 0);
-      c.clearRect(0, 0, 152, 140);
-      var yMin = P.view === 'macro' ? -1.7 : -0.7;
-      var yMax = P.view === 'macro' ? 2.8 : 2.5;
-      function mapY(y) { return 128 - (y - yMin) / (yMax - yMin) * 112; }
-      c.strokeStyle = 'rgba(90,180,220,.22)'; c.setLineDash([3, 3]); c.lineWidth = 1;
-      c.beginPath(); c.moveTo(76, 8); c.lineTo(76, 132); c.stroke();
-      c.setLineDash([]);
-      layers.forEach(function (L, i) {
-        var w = Math.min(132, (L.W || 9) / 11 * 126);
-        var y = mapY(L.curY);
-        var isDie = (L.id === 'die' || L.id === 'hbm' || L.id === 'blk');
-        var hh = Math.max(2.5, Math.min(8, isDie ? 7 : 5));
-        c.fillStyle = isDie ? 'rgba(255,180,84,.16)' : 'rgba(82,232,247,.09)';
-        c.strokeStyle = isDie ? 'rgba(255,180,84,.75)' : 'rgba(82,232,247,.55)';
-        c.lineWidth = 1;
-        c.fillRect(76 - w / 2, y - hh / 2, w, hh);
-        c.strokeRect(76 - w / 2, y - hh / 2, w, hh);
-        c.fillStyle = isDie ? 'rgba(255,190,110,.9)' : 'rgba(140,220,240,.72)';
-        c.font = '7px Consolas, monospace';
-        c.fillText('' + i, 3, y + 2.5);
-        var tagS = L.id.toUpperCase();
-        c.fillText(tagS, 149 - c.measureText(tagS).width, y + 2.5);
-      });
-      c.fillStyle = 'rgba(140,220,240,.5)';
-      c.font = '6.5px Consolas, monospace';
-      c.fillText('层间距 ' + Math.round(curE * 100) + '%', 3, 137);
-    }
-
-    function renderKpi() {
-      var c = CHIPS[P.chip];
-      elKpi.innerHTML = c.kpi.map(function (k, i) {
-        return '<span class="cp-k' + (i === 0 ? ' hot' : '') + '"><b>' + k[0] +
-          '<i>' + k[1] + '</i></b><span>' + k[2] + '</span></span>';
+    /* 部件清单 */
+    elList.innerHTML = '<h5>部件清单<b>PARTS · ' + ALL_IDS.length + '</b></h5>' +
+      ALL_IDS.map(function (id, i) {
+        var p = parts[id];
+        return '<button class="ck-row" data-id="' + id + '">' +
+          '<span class="ck-no">' + (i < 9 ? '0' : '') + (i + 1) + '</span>' +
+          '<span class="ck-nm">' + p.info.name + '</span>' +
+          '<span class="ck-en">' + p.info.en.split(' · ')[0] + '</span>' +
+          '<i class="ck-dot"></i></button>';
       }).join('');
-      elSub.textContent = c.vendor + ' · ' + c.node + ' · ' +
-        (P.view === 'macro' ? '封装堆叠剖面' : c.unit + ' 单元剖面');
+
+    /* 标注 */
+    var LABEL_IDS = ['ga', 'gb', 'cpu', 'na', 'nb', 'nvl'];
+    var TAG_SIDE = { ga: 'l', gb: 'r', cpu: 'l', na: 'l', nb: 'r', nvl: 'r' };
+    LABEL_IDS.forEach(function (id, i) {
+      var p = parts[id];
+      var tag = document.createElement('div');
+      tag.className = 'ck-tag ' + (TAG_SIDE[id] || (i % 2 === 0 ? 'l' : 'r'));
+      tag.innerHTML = '<b>' + p.info.name + '</b><span>' + p.info.params[0][1] + ' · ' + p.info.params[2][1] + '</span>';
+      elLabels.appendChild(tag);
+      var dot = document.createElement('i');
+      dot.className = 'ck-pt';
+      elLabels.appendChild(dot);
+      p.tag = tag; p.dot = dot;
+    });
+
+    var selId = null;
+    var P = { spin: false, labels: true, glow: true, explodeAll: false };
+
+    function partState(id) {
+      if (id === selId) return 1;
+      if (P.explodeAll) return 1;
+      return 0;
     }
-    function renderStack() {
-      var layers = P.view === 'macro' ? allLayers[P.chip] : microLayers[P.chip];
-      elStack.innerHTML = '<h5>层叠结构<b>STACK · ' + layers.length + ' LAYERS</b></h5>' +
-        layers.map(function (L, i) {
-          return '<button class="cp-l' + (i === focusIdx ? ' on' : '') + '" data-i="' + i + '">' +
-            '<span class="cp-li">' + pad2(i) + '</span>' +
-            '<span class="cp-ln">' + L.name + '</span>' +
-            '<span class="cp-le">' + L.en + '</span></button>';
-        }).join('');
-      Array.prototype.forEach.call(elStack.querySelectorAll('.cp-l'), function (b) {
-        b.addEventListener('click', function () { toggleFocus(parseInt(b.dataset.i, 10)); });
+
+    function applySelection(id, fly) {
+      if (id === selId) id = null;           // 再次点击同一部件 = 收起
+      selId = id;
+      P.explodeAll = false;
+      ALL_IDS.forEach(function (k) {
+        parts[k].target = partState(k);
       });
-    }
-    function renderCard() {
-      var c = CHIPS[P.chip], micro = P.view === 'micro';
-      var legend = micro ? c.legendMicro : c.legend;
-      var html = '<h5>' + (micro ? '单元构成 · ' + c.unit : '功能区块 · BLOCKS') + '</h5>';
-      html += legend.map(function (l) {
-        return '<div class="cp-lg"><i style="background:' + l[0] + '"></i>' +
-          '<span>' + l[1] + '</span><b>' + l[2] + '</b></div>';
-      }).join('');
-      html += '<div class="cp-desc">' + c.note + '</div>';
-      var layers = P.view === 'macro' ? allLayers[P.chip] : microLayers[P.chip];
-      if (focusIdx >= 0 && layers[focusIdx]) {
-        html += '<div class="cp-focus"><b>' + layers[focusIdx].name + '</b>' +
-          '<span>' + layers[focusIdx].note + '</span></div>';
-      }
-      if (micro) html += '<button class="cp-back">← 返回宏观</button>';
-      elCard.innerHTML = html;
-      var back = elCard.querySelector('.cp-back');
-      if (back) back.addEventListener('click', function () { goView('macro'); });
-    }
-    function renderHud() {
-      renderKpi(); renderStack(); renderCard();
-      btnToggle[0].classList.toggle('on', P.view === 'macro');
-      btnToggle[1].classList.toggle('on', P.view === 'micro');
-      elHint.textContent = P.view === 'macro'
-        ? '点击功能区块下钻单元 · 点击左侧层叠结构聚焦剖面 · 拖动旋转 / 滚轮缩放'
-        : 'M1 → M3 是同一套逻辑的三层金属剖面 · 点击分区查看说明';
-      xsecKey = '';
-      drawXsec();
-    }
-
-    /* ============================================================
-       七、参数、视角、聚焦
-       ============================================================ */
-    var P = { view: 'macro', chip: 'gpu', explode: 0.62, flow: true, pins: true, labels: true, spin: false };
-    var curE = 0, introK = 0, focusIdx = -1;
-    var trans = null, flyFocus = null;
-    var _v3 = new THREE.Vector3();
-
-    function homePose(view) {
-      var aspect = camera.aspect || 1.6;
-      var k = aspect < 1.15 ? Math.min(1.95, Math.pow(1.15 / aspect, 0.85)) : 1;
-      if (view === 'macro') return { el: 0.62, az: 0.42, dist: 15.5 * k, tgt: [0, 0.85, 0] };
-      return { el: 0.55, az: 0.35, dist: 6.6 * k, tgt: [0, 0.85, 0] };
-    }
-    function poseToPos(pose) {
-      return [
-        pose.tgt[0] + pose.dist * Math.cos(pose.el) * Math.sin(pose.az),
-        pose.tgt[1] + pose.dist * Math.sin(pose.el),
-        pose.tgt[2] + pose.dist * Math.cos(pose.el) * Math.cos(pose.az)
-      ];
-    }
-
-    function layout(e) {
-      curE = e;
-      [allLayers.gpu, allLayers.cpu, microLayers.gpu, microLayers.cpu].forEach(function (ls) {
-        if (!ls) return;
-        ls.forEach(function (L) {
-          L.curY = L.y0 + L.dy * e;
-          L.group.position.y = L.curY;
-        });
+      Array.prototype.forEach.call(elList.querySelectorAll('.ck-row'), function (r) {
+        r.classList.toggle('on', r.dataset.id === selId);
       });
-      links.forEach(rebuildLink);
-      xsecKey = '';
-      drawXsec();
-    }
-    layout(0);
-
-    function toggleFocus(i) {
-      focusIdx = (focusIdx === i) ? -1 : i;
-      var layers = P.view === 'macro' ? allLayers[P.chip] : microLayers[P.chip];
-      var pose = null;
-      if (focusIdx >= 0) {
-        var L = layers[focusIdx];
-        var aspect = camera.aspect || 1.6;
-        var k = aspect < 1.15 ? 1.45 : 1;
-        pose = { el: 0.34, az: 0.55, dist: (P.view === 'macro' ? 8.6 : 4.8) * k,
-                 tgt: [0, clamp(L.curY + 0.15, -0.6, 4.2), 0] };
-      } else {
-        pose = homePose(P.view);
-      }
-      flyFocus = {
-        t: 0, dur: 0.9,
-        p0: camera.position.clone(), t0: controls.target.clone(),
-        tgt: pose.tgt, el: pose.el, az: pose.az, dist: pose.dist
-      };
-      renderStack(); renderCard();
-    }
-
-    function goView(v) {
-      if (v === P.view || trans) return;
-      var pose = homePose(v);
-      var pp = poseToPos(pose);
-      trans = {
-        t: 0, dur: 0.95, from: P.view, to: v,
-        p0: camera.position.clone(), t0: controls.target.clone(),
-        p1: new THREE.Vector3(pp[0], pp[1], pp[2]),
-        t1: new THREE.Vector3(pose.tgt[0], pose.tgt[1], pose.tgt[2])
-      };
-      focusIdx = -1;
+      renderCard();
       elFlash.classList.remove('on');
       void elFlash.offsetWidth;
       elFlash.classList.add('on');
-      hud.classList.add('zoom');
-      setTimeout(function () { hud.classList.remove('zoom'); }, 900);
-      if (HL.ui && HL.ui.sync) HL.ui.sync('view', v);
+      if (fly && id) focusPart(parts[id]);
+      else if (!id) flyHome();
+      elCard.classList.toggle('show', !!id);
+      hud.classList.toggle('inspect', !!id);
     }
 
-    function switchChip(k) {
-      if (k === P.chip) return;
-      P.chip = k;
-      applyVisibility();
-      introK = 0;                                  // 重新装配一次
-      if (HL.ui && HL.ui.sync) HL.ui.sync('chip', k);
-      renderHud();
-      tour.load(buildSteps());
-    }
-
-    function applyVisibility() {
-      allLayers.gpu.forEach(function (L) { L.group.visible = (P.chip === 'gpu'); });
-      allLayers.cpu.forEach(function (L) { L.group.visible = (P.chip === 'cpu'); });
-      microLayers.gpu.forEach(function (L) { L.group.visible = (P.chip === 'gpu'); });
-      microLayers.cpu.forEach(function (L) { L.group.visible = (P.chip === 'cpu'); });
-      var key = P.chip + P.view;
-      links.forEach(function (lk) { lk.mesh.visible = (lk.owner === key); });
-      flows.forEach(function (f) { f.pts.visible = (f.owner === key) && P.flow; });
-    }
-
-    /* ============================================================
-       八、讲解模式
-       ============================================================ */
-    function buildSteps() {
-      var c = CHIPS[P.chip];
-      var isGpu = P.chip === 'gpu';
-      var layers = allLayers[P.chip], ml = microLayers[P.chip];
-      function layerPose(L) {
-        var aspect = camera.aspect || 1.6;
-        var k = aspect < 1.15 ? 1.45 : 1;
-        return [[6.4 * k, L.curY + 2.7, 7.6 * k], [0, L.curY, 0]];
+    function focusPart(p) {
+      var bb = new THREE.Box3().setFromObject(p.group);
+      if (!bb.isEmpty()) {
+        var c = bb.getCenter(new THREE.Vector3());
+        var size = bb.getSize(new THREE.Vector3());
+        var rad = Math.max(size.x, size.y) * 0.5;
+        var dist = Math.min(15, Math.max(4.6, rad / Math.tan(camera.fov * Math.PI / 360) * 1.55));
+        var n = new THREE.Vector3(0, 0, 1).applyQuaternion(root.quaternion).normalize();
+        var pos = c.clone().add(n.multiplyScalar(dist));
+        // 保留一点现有视角方向，避免完全正对
+        pos.x += (camera.position.x - c.x) * 0.10;
+        pos.y += (camera.position.y - c.y) * 0.10;
+        flyTo(pos, c, 0.95);
       }
-      var steps = [
-        { t: c.name + ' · 立体剖面台',
-          d: '一颗现代芯片不是一块硅，而是一座十几层的立体城市：引脚、基板、中介层、微凸块、裸片、存储堆叠层层叠合。' + c.note,
-          exp: '拖动右侧「层间距」，把封装像抽屉一样拉开；点击左下的层叠结构可单独聚焦每一层。',
-          cam: function () { var p = homePose('macro'); return [poseToPos(p), p.tgt]; },
-          pulse: [0, 1.6, 0], r: 4.2 },
-        { t: '01 · ' + layers[0].name,
-          d: layers[0].note + (isGpu ? ' GPU 用 BGA 锡球；CPU 用 LGA 平面触点，靠插座的弹簧针完成接触。' : ''),
-          exp: '用右键把视角压低，看引脚阵列的规整网格。',
-          cam: function () { return layerPose(layers[0]); } },
-        { t: '02 · ' + layers[1].name,
-          d: layers[1].note + ' 信号脉冲正沿着这些走线缓慢流动。',
-          exp: '放大看基板表面的走线与过孔焊盘。',
-          cam: function () { return layerPose(layers[1]); } },
-        { t: '03 · ' + layers[2].name,
-          d: layers[2].note,
-          exp: isGpu ? '注意穿过中介层的硅通孔：拉开层间距后，它们是连接上下层的细柱。'
-                     : 'RDL 层的走线密度介于基板与裸片之间。',
-          cam: function () { return layerPose(layers[2]); } },
-        { t: '04 · ' + layers[3].name,
-          d: layers[3].note,
-          exp: isGpu ? '点击任意 GPC，直接下钻到 SM 内部。' : '点击任意 CCD，下钻到 Zen 5c 核心内部。',
-          cam: function () { return layerPose(layers[3]); },
-          pulse: function () { return new THREE.Vector3(0, layers[3].curY + 0.3, 0); }, r: 3.4 },
-        { t: '05 · 微凸块 · μBUMP',
-          d: '微凸块是裸片与下方各层之间唯一的垂直通道，间距约 40 µm，一颗芯片上有数万个。',
-          exp: '把「层间距」拉到 100%，看凸块阵列被拉成一片柱林。',
-          cam: function () {
-            var mid = (layers[2].curY + layers[3].curY) / 2;
-            return [[5.6, mid + 2.4, 6.6], [0, mid, 0]];
-          } }
-      ];
-      if (isGpu) {
-        steps.push({ t: '06 · HBM3e 3D 堆叠',
-          d: layers[4].note + ' 8 组堆叠贴在裸片两侧，合计带宽 8 TB/s——是整卡功耗与面积的另一个大头。',
-          exp: '把视角转到侧面，看 DRAM 层的堆叠节奏。',
-          cam: function () { return layerPose(layers[4]); } });
-      }
-      steps = steps.concat([
-        { t: (isGpu ? '07' : '06') + ' · 下钻：' + c.unit + ' 单元内部',
-          apply: function () { if (P.view !== 'micro') goView('micro'); },
-          d: '从封装到单元差了五个数量级。现在进入单个 ' + c.unit + ' 的 BEOL 剖面：硅基底、FinFET 与三层金属布线。',
-          exp: '用「层间距」把晶体管层与金属层拉开。',
-          cam: function () { var p = homePose('micro'); return [poseToPos(p), p.tgt]; },
-          pulse: [0, 1.2, 0], r: 1.8 },
-        { t: (isGpu ? '08' : '07') + ' · 晶体管层与金属层',
-          d: ml[0].note + ' ' + ml[1].note,
-          exp: '对比 M1 / M2 / M3 的线宽与密度：越往上越宽、越稀。',
-          cam: function () { return layerPose(ml[1]); } },
-        { t: (isGpu ? '09' : '08') + ' · ' + ml[4].name,
-          d: ml[4].note + ' 这就是"分区功能模块"在微观尺度上的样子。',
-          exp: '点击任意分区，查看它负责什么。',
-          cam: function () { return layerPose(ml[4]); },
-          pulse: function () { return new THREE.Vector3(0, ml[4].curY + 0.2, 0); }, r: 1.6 }
-      ]);
-      return steps;
     }
-    var tour = HL.Tour(ctx);
 
-    /* ============================================================
-       九、拾取
-       ============================================================ */
-    var hoverId = -1, lastMove = null;
-    function onMove(e) {
-      var r = canvas.getBoundingClientRect();
-      lastMove = {
-        x: ((e.clientX - r.left) / r.width) * 2 - 1,
-        y: -((e.clientY - r.top) / r.height) * 2 + 1,
-        cx: e.clientX, cy: e.clientY
+    function homeFor(aspect) {
+      var vFov = camera.fov * Math.PI / 180;
+      var dV = (BH * 1.22) / 2 / Math.tan(vFov / 2);
+      var dH = (BW * 1.34) / 2 / Math.tan(vFov / 2) / Math.max(0.35, aspect);
+      var d = Math.max(dV, dH);
+      var wide = aspect >= 1.2;
+      return {
+        pos: new THREE.Vector3(wide ? d * 0.144 : d * 0.015, d * 0.038, d),
+        tgt: new THREE.Vector3(wide ? 0.95 : 0, 0.10, 0)
       };
     }
-    canvas.addEventListener('pointermove', onMove);
+    var _h0 = homeFor(camera.aspect || 1.6);
+    var homePos = _h0.pos.clone();
+    var homeTgt = _h0.tgt.clone();
+    var lastAspect = camera.aspect;
+    camera.position.copy(homePos);
+    controls.target.copy(homeTgt);
+    camera.updateProjectionMatrix();
+    controls.syncFromCamera();
 
-    function activePick() {
-      return pickSets[P.view] ? (pickSets[P.view][P.chip] || null) : null;
+    var fly = null;
+    function flyTo(pos, tgt, dur) {
+      fly = {
+        p0: camera.position.clone(), p1: pos.clone(),
+        t0: controls.target.clone(), t1: tgt.clone(),
+        t: 0, dur: dur || 1.0
+      };
     }
-    function updateHover() {
-      if (!lastMove || trans) { if (hoverId >= 0) restoreHover(); return; }
-      var set = activePick();
-      if (!set) { if (hoverId >= 0) restoreHover(); return; }
-      raycaster.setFromCamera({ x: lastMove.x, y: lastMove.y }, camera);
-      var hit = raycaster.intersectObject(set.mesh, false);
-      var id = hit.length ? hit[0].instanceId : -1;
-      if (id >= 0 && set.list[id] && set.list[id].noPick) id = -1;
-      if (id !== hoverId) {
-        restoreHover();
-        hoverId = id;
-        if (id >= 0) {
-          set.list[id].hover = true;
-          canvas.style.cursor = 'pointer';
-          if (HL.tooltip) HL.tooltip.show('<b>' + (set.list[id].name || '区块') + '</b>' +
-            (set.list[id].sub ? '<br>' + set.list[id].sub : ''), lastMove.cx, lastMove.cy);
-        } else {
-          canvas.style.cursor = '';
-          if (HL.tooltip) HL.tooltip.hide();
-        }
+    function flyHome() { flyTo(homePos, homeTgt, 0.95); }
+
+    /* 详情卡 */
+    function renderCard() {
+      var p = selId ? parts[selId] : null;
+      if (!p) {
+        elCard.innerHTML =
+          '<h5>概览<b>OVERVIEW</b></h5>' +
+          '<div class="ck-ov">' +
+          '<div class="ck-ovrow"><span>计算</span><b>2 × B300 · 1 × Grace</b></div>' +
+          '<div class="ck-ovrow"><span>显存</span><b>288 GB HBM3e / GPU</b></div>' +
+          '<div class="ck-ovrow"><span>网络</span><b>2 × CX-8 · 800 Gb/s</b></div>' +
+          '<div class="ck-ovrow"><span>整机</span><b>72 GPU / 36 CPU</b></div>' +
+          '</div>' +
+          '<div class="ck-desc">这是 GB300 NVL72 的一个计算托盘上半区：两颗 Blackwell Ultra GPU、一颗 Grace CPU 与两颗 ConnectX-8 SuperNIC 共用一块高密度载板。点击任意部件可拆解查看。</div>' +
+          '<div class="ck-tips"><b>操作</b>拖动旋转 · 滚轮缩放 · 点击部件拆解 · 点空白处复位</div>';
+        return;
+      }
+      var rows = p.info.params.map(function (kv) {
+        return '<div class="ck-pr"><span>' + kv[0] + '</span><b>' + kv[1] + '</b></div>';
+      }).join('');
+      elCard.innerHTML =
+        '<h5>' + p.info.en + '<b>DETAIL</b></h5>' +
+        '<div class="ck-name">' + p.info.name + '</div>' +
+        '<div class="ck-prs">' + rows + '</div>' +
+        '<div class="ck-desc">' + p.info.desc + '</div>' +
+        '<button class="ck-btn" id="ckToggle">' + (p.target > 0.5 ? '↑ 收起部件' : '⧉ 拆解该部件') + '</button>';
+      var btn = elCard.querySelector('#ckToggle');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          if (selId) { parts[selId].target = parts[selId].target > 0.5 ? 0 : 1; }
+        });
       }
     }
-    function restoreHover() {
-      var set = activePick();
-      hoverId = -1;
-      canvas.style.cursor = '';
-      if (HL.tooltip) HL.tooltip.hide();
-      if (set) set.list.forEach(function (b) { b.hover = false; });
-    }
+    renderCard();
 
-    function onClick(ndc) {
-      if (trans || !ndc) return;
-      var set = activePick();
-      if (!set) return;
-      raycaster.setFromCamera({ x: ndc.x, y: ndc.y }, camera);
-      var hit = raycaster.intersectObject(set.mesh, false);
-      if (!hit.length) return;
-      var b = set.list[hit[0].instanceId];
-      if (!b || b.noPick) return;
-      if (P.view === 'macro') {
-        goView('micro');
-        elHint.textContent = '已下钻：' + (b.name || '区块') + (b.sub ? ' · ' + b.sub : '');
-      } else if (b.info) {
-        elHint.textContent = b.name + ' · ' + b.info;
-      }
+    /* 列表 / 按钮事件 */
+    elList.addEventListener('click', function (e) {
+      var row = e.target.closest ? e.target.closest('.ck-row') : null;
+      if (!row) return;
+      applySelection(row.dataset.id, true);
+    });
+    function toggleExplodeAll() {
+      selId = null;
+      P.explodeAll = !P.explodeAll;
+      ALL_IDS.forEach(function (k) { parts[k].target = partState(k); });
+      Array.prototype.forEach.call(elList.querySelectorAll('.ck-row'), function (r) { r.classList.remove('on'); });
+      renderCard();
+      elCard.classList.remove('show');
+      hud.classList.remove('inspect');
+      if (P.explodeAll) flyHome();
+      elHint.textContent = P.explodeAll ? '全部部件已拆解 · 再点一次合拢' : '拖动旋转 · 滚轮缩放 · 点击部件拆解';
+    }
+    function resetAll() {
+      selId = null; P.explodeAll = false;
+      ALL_IDS.forEach(function (k) { parts[k].target = 0; });
+      Array.prototype.forEach.call(elList.querySelectorAll('.ck-row'), function (r) { r.classList.remove('on'); });
+      renderCard(); flyHome(); elCard.classList.remove('show');
+      hud.classList.remove('inspect');
+      elHint.textContent = '拖动旋转 · 滚轮缩放 · 点击部件拆解';
     }
 
     /* ============================================================
-       十、主循环
+       七、拾取
        ============================================================ */
-    var breathPhase = 0, lastE = -1;
+    var ray = new THREE.Raycaster();
+    var ndc = new THREE.Vector2();
 
-    function stepSim(dt) {
-      /* 装配动画 + 层间距 */
-      var target = P.explode;
-      if (introK < 1) {
-        introK = Math.min(1, introK + dt / 1.5);
-        target = P.explode * easeOut(introK);
-      }
-      if (Math.abs(target - lastE) > 0.0005 || lastE < 0) { layout(target); lastE = target; }
-
-      /* 呼吸：区块自发光 + 走线材质 + 底面辉光 */
-      breathPhase += dt * 0.55;
-      var breath = 0.5 + 0.5 * Math.sin(breathPhase);
-      [allLayers.gpu, allLayers.cpu, microLayers.gpu, microLayers.cpu].forEach(function (ls) {
-        if (!ls) return;
-        ls.forEach(function (L) {
-          if (!L.group.visible) return;
-          if (L.blockMesh && L.blockMesh.instanceColor) {
-            var changed = false;
-            for (var i = 0; i < L.blocks.length; i++) {
-              var b = L.blocks[i];
-              if (b.noPick && !b.kind) continue;
-              var f = 0.78 + 0.24 * (0.5 + 0.5 * Math.sin(breathPhase * 0.9 + b.ph)) + (b.hover ? 0.5 : 0);
-              _col.setHex(b.baseCol).multiplyScalar(f);
-              L.blockMesh.setColorAt(i, _col);
-              changed = true;
-            }
-            if (changed) L.blockMesh.instanceColor.needsUpdate = true;
-          }
-          if (L.blockLines) L.blockLines.material.opacity = 0.13 + 0.12 * breath;
-        });
-      });
-      breathMats.forEach(function (bm) {
-        bm.mat.emissiveIntensity = bm.base + bm.amp * (0.5 + 0.5 * Math.sin(breathPhase * 0.7 + 1.3));
-      });
-      if (floorGlows.gpu) floorGlows.gpu.opacity = 0.10 + 0.08 * breath;
-      if (floorGlows.cpu) floorGlows.cpu.opacity = 0.10 + 0.08 * breath;
-
-      /* 信号脉冲 */
-      if (P.flow) flows.forEach(function (f) { if (f.pts.visible) updateFlow(f, dt); });
-
-      /* 视角切换 */
-      if (trans) {
-        trans.t += dt / trans.dur;
-        var e2 = easeIO(clamp(trans.t, 0, 1));
-        camera.position.lerpVectors(trans.p0, trans.p1, e2);
-        controls.target.lerpVectors(trans.t0, trans.t1, e2);
-        if (controls.syncFromCamera) controls.syncFromCamera();
-        if (trans.t >= 0.5 && P.view !== trans.to) {
-          macroRoot.visible = (trans.to === 'macro');
-          microRoot.visible = (trans.to === 'micro');
-          P.view = trans.to;
-          applyVisibility();
-          renderHud();
+    function pick(px, py) {
+      ndc.set(px, py);
+      ray.setFromCamera(ndc, camera);
+      var hits = ray.intersectObjects(partsG.children, true);
+      for (var i = 0; i < hits.length; i++) {
+        var o = hits[i].object;
+        while (o) {
+          if (o.userData && o.userData.part) return o.userData.part;
+          o = o.parent;
         }
-        if (trans.t >= 1) { P.view = trans.to; trans = null; }
       }
-
-      /* 层聚焦飞行 */
-      if (flyFocus) {
-        flyFocus.t += dt / flyFocus.dur;
-        var e3 = easeIO(clamp(flyFocus.t, 0, 1));
-        _p.set(
-          flyFocus.tgt[0] + flyFocus.dist * Math.cos(flyFocus.el) * Math.sin(flyFocus.az),
-          flyFocus.tgt[1] + flyFocus.dist * Math.sin(flyFocus.el),
-          flyFocus.tgt[2] + flyFocus.dist * Math.cos(flyFocus.el) * Math.cos(flyFocus.az)
-        );
-        _v3.set(flyFocus.tgt[0], flyFocus.tgt[1], flyFocus.tgt[2]);
-        camera.position.lerpVectors(flyFocus.p0, _p, e3);
-        controls.target.lerpVectors(flyFocus.t0, _v3, e3);
-        if (controls.syncFromCamera) controls.syncFromCamera();
-        if (flyFocus.t >= 1) flyFocus = null;
-      }
-
-      /* 慢速旋转（聚焦 / 讲解时暂停，避免打断阅读） */
-      if (P.spin && !flyFocus && !tour.active()) world.rotation.y += dt * 0.05;
-
-      updateHover();
-      updateLabels(canvas.clientWidth, canvas.clientHeight);
+      return null;
     }
 
-    applyVisibility();
-    renderHud();
-    tour.load(buildSteps());
+    /* ============================================================
+       八、逐帧
+       ============================================================ */
+    var _wp = new THREE.Vector3();
+    var _proj = new THREE.Vector3();
 
-    return {
-      update: function (dt, tt) {
-        tour.update(dt, tt || 0, stepSim);
+    function easeOut(k) { return 1 - Math.pow(1 - k, 3); }
+    function easeInOut(k) { return k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; }
+
+    function updateTags(w, h) {
+      var show = P.labels && w >= 900;
+      LABEL_IDS.forEach(function (id) {
+        var p = parts[id];
+        if (!show) { p.tag.style.display = 'none'; p.dot.style.display = 'none'; return; }
+        _wp.set(p.anchor[0], p.anchor[1], p.anchor[2] || 0.3);
+        p.group.localToWorld(_wp);
+        _proj.copy(_wp).project(camera);
+        if (_proj.z > 1 || _proj.z < -1) { p.tag.style.display = 'none'; p.dot.style.display = 'none'; return; }
+        var sx = (_proj.x * .5 + .5) * w, sy = (-_proj.y * .5 + .5) * h;
+        if (sx < 40 || sx > w - 40 || sy < 80 || sy > h - 40) { p.tag.style.display = 'none'; p.dot.style.display = 'none'; return; }
+        p.dot.style.display = 'block';
+        p.dot.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px)';
+        p.tag.style.display = 'block';
+        p.tag.style.left = sx.toFixed(1) + 'px';
+        p.tag.style.top = sy.toFixed(1) + 'px';
+        p.tag.classList.toggle('on', selId === id);
+      });
+    }
+
+    function updateParts(dt) {
+      ALL_IDS.forEach(function (id) {
+        var p = parts[id];
+        var kk = 1 - Math.exp(-dt * 7.5);      // 与帧率无关的缓动逼近
+        p.t += (p.target - p.t) * kk;
+        if (Math.abs(p.target - p.t) < 0.002) p.t = p.target;
+        var e = easeOut(p.t);
+
+        // 整体微微离开板面（VRM 靠逐颗电感升起，不再整体抬）
+        var lift = p.inst ? 0 : e * 0.28;
+        p.group.position.z = (p.baseZ === undefined ? (p.inst ? 0 : 0.02) : p.baseZ) + lift;
+
+        // 子层分离
+        p.layers.forEach(function (L) {
+          var lt = Math.max(0, Math.min(1, (e - L.delay) / Math.max(0.25, 1 - L.delay)));
+          var ee = easeOut(lt);
+          if (L.obj === p.group) { /* 整个 group 已处理 */ }
+          else {
+            if (L.obj.userData.bz === undefined) L.obj.userData.bz = L.obj.position.z;
+            L.obj.position.z = L.obj.userData.bz + ee * L.dz;
+            if (L.dy) {
+              if (L.obj.userData.by === undefined) L.obj.userData.by = L.obj.position.y;
+              L.obj.position.y = L.obj.userData.by + ee * L.dy;
+            }
+          }
+        });
+
+        // 发光 / 压暗
+        var on = (selId === id) || P.explodeAll;
+        var inten = (P.glow ? (on ? 0.20 + 0.07 * Math.sin(clock * 2.4) : 0) : 0);
+        if (p.lastGlow !== inten) {
+          p.mats.forEach(function (m) {
+            if (!m.emissive) return;
+            m.emissiveIntensity = (m.userData.baseEmissive || 0) + inten;
+            // 带贴图的裸片 / 顶盖不染发光色，避免整块过曝成白板
+            if (m.userData.baseEmissiveColor !== undefined) m.emissive.setHex(m.userData.baseEmissiveColor);
+          });
+          p.lastGlow = inten;
+        }
+        if (p.glow) p.glow.material.opacity = P.glow && on ? 0.07 + 0.03 * Math.sin(clock * 2.2) : 0;
+
+        // VRM 逐颗错峰升起
+        if (p.inst && p.instBase) {
+          var need = Math.abs(p.t - (p.lastInst || 0)) > 0.001;
+          if (need) {
+            for (var i = 0; i < p.instBase.length; i++) {
+              var b = p.instBase[i];
+              var stag = Math.max(0, Math.min(1, (e - (i % 11) * 0.035) / 0.7));
+              dummy.position.set(b.x, b.y, b.z + easeOut(stag) * 0.30);
+              dummy.rotation.set(0, 0, 0);
+              dummy.scale.set(1, 1, b.s);
+              dummy.updateMatrix();
+              p.inst.setMatrixAt(i, dummy.matrix);
+            }
+            p.inst.instanceMatrix.needsUpdate = true;
+            p.lastInst = p.t;
+          }
+        }
+      });
+    }
+
+    /* ============================================================
+       九、讲解模式
+       ============================================================ */
+    var tour = HL.Tour(ctx, { accent: 0x5ce1f0 });
+    tour.load([
+      {
+        t: '一块托盘，四类芯片',
+        d: '这是 GB300 NVL72 的一个计算托盘上半区。78 块这样的托盘叠进一个机柜，组成 72 颗 GPU、36 颗 CPU 的全连接计算机。先看整体：两颗 GPU 在上，Grace CPU 居中，两颗网络芯片在下。',
+        exp: '拖动旋转，看看这块板有多厚；滚轮放大到两颗 GPU 的封装框。',
+        cam: [[3.6, 0.95, 25.0], [0.95, 0.10, 0]],
+        apply: function () { setSel(null); }
       },
+      {
+        t: 'Blackwell Ultra：两颗裸片，一颗 GPU',
+        d: '每颗 GPU 封装里是两颗逼近光罩极限的裸片，中间用 NV-HBI 以 10 TB/s 缝合，逻辑上仍是一颗 GPU。四周八组 HBM3e 堆叠，合计 288 GB、8 TB/s。',
+        exp: '点击左侧 GPU，看封装框、裸片与基板如何分层升起。',
+        cam: [[-1.4, 2.9, 8.2], [-2.18, 2.35, 0.3]],
+        apply: function () { setSel('ga'); }
+      },
+      {
+        t: 'Grace：托盘里的主控',
+        d: '72 个 Arm Neoverse V2 核心，用 NVLink-C2C 与两颗 GPU 共享统一内存。CPU 不再是配角——它负责调度、数据预处理和整个托盘的管理。',
+        exp: '点击 CPU，IHS 顶盖抬起后能看到下面的裸片。',
+        cam: [[0.2, 0.1, 7.0], [0, -0.55, 0.2]],
+        apply: function () { setSel('cpu'); }
+      },
+      {
+        t: 'ConnectX-8：把算力接进网络',
+        d: '每颗 800 Gb/s。GPU 之间的集合通信走 NVLink，跨机柜则走这两颗网卡；它们让 72 卡域之外的扩展仍然保持高带宽、低延迟。',
+        exp: '点击任意一颗网卡，注意金色边框下的中央 die。',
+        cam: [[0.4, -3.2, 6.2], [0, -3.6, 0.2]],
+        apply: function () { setSel('na'); }
+      },
+      {
+        t: 'NVLink 连接器：托盘的神经束',
+        d: '顶部两个黑色连接器直接插进 midplane。每个 GPU 在这里获得 1.8 TB/s 的双向带宽，整柜 72 颗 GPU 因此像一个巨大的加速器一样协同。',
+        exp: '点击连接器，壳体升起，露出里面的金手指。',
+        cam: [[0.3, 5.6, 6.4], [0, 5.0, 0.2]],
+        apply: function () { setSel('nvl'); }
+      },
+      {
+        t: '供电与载板：看不见的工程',
+        d: '1.4 kW 的 GPU 需要的不是一根电源线，而是数十相 VRM 紧贴封装布置，把 48 V 降到 1 V 级；数百颗去耦电容压住瞬态波动。载板本身是二十多层的高密度互连板。',
+        exp: '点击左侧供电阵列，看电感逐颗升起；再点空白处合拢。',
+        cam: [[-2.6, 0.9, 9.2], [-3.4, 0.9, 0.2]],
+        apply: function () { setSel('vrm'); }
+      }
+    ]);
+
+    function setSel(id) {
+      selId = id;
+      P.explodeAll = false;
+      ALL_IDS.forEach(function (k) { parts[k].target = partState(k); });
+      Array.prototype.forEach.call(elList.querySelectorAll('.ck-row'), function (r) {
+        r.classList.toggle('on', r.dataset.id === id);
+      });
+      renderCard();
+      elCard.classList.toggle('show', !!id);
+      hud.classList.toggle('inspect', !!id);
+    }
+
+    var tourOn = false;
+
+    /* ============================================================
+       十、对外接口
+       ============================================================ */
+    var api = {
+      update: function (dt, tt) {
+        clock += dt;
+        if (P.spin) root.rotation.y += dt * 0.10;
+
+        if (Math.abs((camera.aspect || 1) - lastAspect) > 0.01) {
+          lastAspect = camera.aspect;
+          if (!fly && !selId) {
+            var hh = homeFor(lastAspect);
+            homePos.copy(hh.pos); homeTgt.copy(hh.tgt);
+            camera.position.copy(homePos);
+            controls.target.copy(homeTgt);
+            if (controls.syncFromCamera) controls.syncFromCamera();
+          }
+        }
+
+        if (fly) {
+          fly.t += dt / fly.dur;
+          var k = Math.min(1, fly.t);
+          var e = easeInOut(k);
+          camera.position.lerpVectors(fly.p0, fly.p1, e);
+          controls.target.lerpVectors(fly.t0, fly.t1, e);
+          if (controls.syncFromCamera) controls.syncFromCamera();
+          if (k >= 1) fly = null;
+        }
+
+        updateParts(dt);
+
+        var w = renderer.domElement.clientWidth || window.innerWidth;
+        var h = renderer.domElement.clientHeight || window.innerHeight;
+        updateTags(w, h);
+
+        if (dust) {
+          dust.rotation.z += dt * 0.008;
+          dust.position.y = Math.sin(clock * 0.18) * 0.25;
+        }
+
+        tour.update(dt, tt || 0, function () {});
+        var ton = tour.active();
+        if (ton !== tourOn) { tourOn = ton; hud.classList.toggle('tour-on', ton); }
+      },
+
       setParam: function (key, v) {
         if (key === 'tour') { tour.toggle(); return; }
-        if (key === 'view') { if (v !== P.view) goView(v); return; }
-        if (key === 'chip') { switchChip(v); return; }
-        if (key === 'explode') { P.explode = v; introK = 1; layout(v); return; }
+        if (key === 'explodeAll') { toggleExplodeAll(); return; }
+        if (key === 'resetView') { resetAll(); return; }
+        if (key === 'focus') { applySelection(v, true); return; }
         P[key] = v;
-        if (key === 'flow' || key === 'pins') applyVisibility();
+        if (key === 'labels') {
+          elLabels.style.display = v ? '' : 'none';
+        }
+        if (key === 'glow') {
+          ALL_IDS.forEach(function (id) { parts[id].lastGlow = null; });
+        }
+        if (key === 'spin' && !v) { /* 保持当前角度 */ }
       },
-      onClick: onClick,
+
+      onClick: function (nd) {
+        var id = pick(nd.x, nd.y);
+        if (id) applySelection(id, true);
+        else if (selId || P.explodeAll) {
+          selId = null; P.explodeAll = false;
+          ALL_IDS.forEach(function (k) { parts[k].target = 0; });
+          Array.prototype.forEach.call(elList.querySelectorAll('.ck-row'), function (r) { r.classList.remove('on'); });
+          renderCard(); elCard.classList.remove('show'); flyHome();
+        }
+      },
+
       dispose: function () {
-        tour.dispose();
-        canvas.removeEventListener('pointermove', onMove);
-        if (HL.tooltip) HL.tooltip.hide();
         if (hud.parentNode) hud.parentNode.removeChild(hud);
-        TEXS.forEach(function (t) { t.dispose(); });
-        glowTex.dispose();
-        world.traverse(function (o) {
-          if (o.geometry && o.geometry !== boxGeo && o.geometry !== cylGeo && o.geometry !== ballGeo) {
-            o.geometry.dispose();
+        tour.dispose();
+        scene.remove(root);
+        if (dust) { scene.remove(dust); dust.geometry.dispose(); dust.material.dispose(); }
+        root.traverse(function (o) {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) {
+            var ms = Array.isArray(o.material) ? o.material : [o.material];
+            ms.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
           }
-          var m = o.material;
-          if (m) (Array.isArray(m) ? m : [m]).forEach(function (mm) {
-            if (mm.map && mm.map !== glowTex) mm.map.dispose();
-            mm.dispose();
-          });
         });
-        scene.remove(world);
+      },
+
+      _chipState: function () {
+        return {
+          sel: selId, explodeAll: P.explodeAll,
+          parts: ALL_IDS.length,
+          tags: LABEL_IDS.filter(function (id) { return parts[id].tag && parts[id].tag.style.display !== 'none'; }).length,
+          t: ALL_IDS.map(function (id) { return +parts[id].t.toFixed(2); }),
+          calls: renderer.info.render.calls,
+          tris: renderer.info.render.triangles,
+          camY: +camera.position.y.toFixed(2),
+          nan: !(isFinite(camera.position.x) && isFinite(camera.position.y) && isFinite(camera.position.z))
+        };
       }
     };
+    return api;
   }
 });
