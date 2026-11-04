@@ -441,6 +441,19 @@ input[type=range]::-webkit-slider-thumb {
 .gc-row b{font-weight:600;color:#e8f2ff;text-align:right;font-variant-numeric:tabular-nums}
 .gc-plot{display:block;margin-top:8px;border-radius:8px;
   background:rgba(4,8,16,.55);border:1px solid rgba(120,180,255,.12)}
+.gc-xrefs{pointer-events:auto}
+.gc-xref-row{display:flex;gap:8px;margin-top:8px}
+.gc-xref-row button{
+  pointer-events:auto;cursor:pointer;flex:1 1 0;
+  font-family:inherit;font-size:11.5px;letter-spacing:.4px;
+  color:#d7ecff;background:rgba(77,226,255,.08);
+  border:1px solid rgba(77,226,255,.35);border-radius:8px;padding:6px 8px;
+}
+.gc-xref-row button:hover{background:rgba(77,226,255,.18);border-color:rgba(77,226,255,.6)}
+/* 时空弯曲在窄屏先收起公式卡。收起后把手若仍锚在底边，会被贴底面板盖住 */
+@media (max-width: 760px) {
+  .grav-hud.st-narrow.folded { bottom: 46vh; left: 14px; }
+}
 
 /* ---------------- 场景目录页 ---------------- */
 #gallery{position:absolute;inset:0;z-index:9;display:none;overflow-y:auto;
