@@ -26,3 +26,6 @@ Thumbs.db
 *.genie
 .workbuddy/
 web/single.html
+
+# 跨机热更新包（临时传输件，不入库）
+release/热更新包-*
