@@ -5,8 +5,11 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-const ROOT = 'C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light';
+const EDGE_WIN = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const EDGE = process.env.CHROME || (fs.existsSync(EDGE_WIN) ? EDGE_WIN : '/usr/bin/google-chrome');
+const ROOT = fs.existsSync(path.join(__dirname, 'web', 'index.html'))
+  ? __dirname
+  : 'C:/Users/CMCC/WorkBuddy/2026-09-16-19-12-38/human-light';
 const PORT = 9334;
 const W = 640, H = 360;           // 缩略图尺寸（16:9）
 const WAIT = 7000;                // 每场景渲染等待（ms）
@@ -36,6 +39,7 @@ const SHOTS = [
   { id: 'maxwell', q: '' },
   { id: 'massenergy', q: '?act=balance' },
   { id: 'gravity', q: '?g=escape' },
+  { id: 'spacetime', q: '?st=lens' },
   { id: 'aiagent', q: '' },
   { id: 'neuralnet', q: '' }
 ];
@@ -58,10 +62,11 @@ async function main() {
   if (!list.length) { console.log('no such scene: ' + ONLY.join(',')); process.exit(1); }
 
   const child = execFile(EDGE, [
-    '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=swiftshader',
+    '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader',
+    '--use-gl=angle', '--use-angle=swiftshader',
     '--no-first-run', '--disable-features=msEdgeNewTabPage',
-    '--user-data-dir=' + ROOT + '/_edge_tmp2',
-    '--window-size=1280,760', '--hide-scrollbars',
+    '--user-data-dir=' + path.join('/tmp', 'hl-thumbs-chrome'),
+    '--window-size=1280,760', '--hide-scrollbars', '--no-sandbox', '--disable-dev-shm-usage',
     '--allow-file-access-from-files',
     '--remote-debugging-port=' + PORT, 'about:blank'
   ], () => {});
@@ -79,7 +84,8 @@ async function main() {
 
   const out = {};
   for (const s of list) {
-    const url = 'file:///' + ROOT + '/web/index.html' + s.q + '#' + s.id;
+    const rootPath = ROOT.replace(/\\/g, '/');
+    const url = 'file://' + (rootPath.charAt(0) === '/' ? rootPath : '/' + rootPath) + '/web/index.html' + s.q + '#' + s.id;
     const t = JSON.parse(await httpReq('http://127.0.0.1:' + PORT + '/json/new?' + encodeURIComponent(url), 'PUT'));
     const ws = new WebSocket(t.webSocketDebuggerUrl);
     await new Promise(r => { ws.onopen = r; });
@@ -146,16 +152,29 @@ async function main() {
 
   const target = path.join(ROOT, 'web/js/data/thumbs.js');
 
-  // 只重拍部分场景时，把结果合并进已有 thumbs.js，避免其它场景被清空
+  // 只重拍部分场景时，按 key 替换或追加，不重排其它缩略图（整文件 pretty-print 会产生无意义大 diff）
   if (ONLY.length && fs.existsSync(target)) {
-    const src = fs.readFileSync(target, 'utf8');
-    const m = src.match(/HL\.THUMBS = ([\s\S]*?);\s*\}\)\(window\);/);
-    if (m) {
-      try {
-        const prev = JSON.parse(m[1]);
-        Object.keys(prev).forEach(k => { if (!out[k]) out[k] = prev[k]; });
-        console.log('MERGED with existing ' + Object.keys(prev).length + ' shots');
-      } catch (e) { console.log('WARN: 已有 thumbs.js 解析失败，按全量写出'); }
+    let src = fs.readFileSync(target, 'utf8');
+    let patched = 0;
+    ONLY.forEach(id => {
+      if (!out[id]) return;
+      const line = '"' + id + '": ' + JSON.stringify(out[id]);
+      const re = new RegExp('"' + id + '":\\s*"data:image[^"]*"');
+      if (re.test(src)) {
+        src = src.replace(re, line);
+      } else if (/\n\};\s*\}\)\(window\);\s*$/.test(src)) {
+        src = src.replace(/\n\};\s*\}\)\(window\);\s*$/, ',\n  ' + line + '\n};\n})(window);\n');
+      } else {
+        console.log('WARN: 无法合并 ' + id);
+        return;
+      }
+      patched++;
+    });
+    if (patched) {
+      fs.writeFileSync(target, src, 'utf8');
+      console.log('MERGED ' + patched + ' shot(s) into ' + target);
+      try { child.kill(); } catch (e) {}
+      process.exit(0);
     }
   }
 

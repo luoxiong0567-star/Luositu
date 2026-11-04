@@ -80,7 +80,10 @@
       else if (k === 'q') idx = 12;         // q → 第 13 个
       else if (k === 'w') idx = 13;         // w → 第 14 个
       else if (k === 'e') idx = 14;
-      else if (k === 't') idx = 15;         // e → 第 15 个
+      else if (k === 't') idx = 15;
+      else if (k === 'y') idx = 16;
+      else if (k === 'u') idx = 17;
+      else if (k === 'i') idx = 18;         // i → 时空弯曲
       if (idx >= 0) {
         var list = HL.allScenes();
         if (list[idx]) load(list[idx].id, true);
@@ -292,6 +295,7 @@
     maxwell: '四区全景：高斯电 / 磁通量、法拉第感应与位移电流',
     massenergy: '质量—能量天平、湮灭 / 裂变 / 聚变微观动画、太阳 vs 煤球',
     gravity: '引力井 · 双星 · 开普勒三定律 · 三体混沌 · 潮汐力 · 逃逸速度',
+    spacetime: '时空织物被质量压弯 · 星光偏折成爱因斯坦环 · GPS 必须修正的引力时间膨胀',
     aiagent: '12 个 AI 智能体的实时调度大屏：任务流、检索评审、成本与派发队列',
     neuralnet: '28 项训练参数 → 多层全连接 → 8 类训练诊断：逐层点亮、信号流动、概率输出',
     brain: '本人头颅 MRI 平扫的 87 层影像：扫描带推进、三视图同步、T2 / FLAIR / T1 三种加权对比',
@@ -301,7 +305,7 @@
 
   /* 场景目录 · 四章叙事结构 */
   var CHAPTERS = [
-    { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 物质与能量 · 电磁之光', ids: ['solar', 'cosmos', 'gravity', 'massenergy', 'maxwell', 'emwave'] },
+    { name: 'Ⅰ · 宇宙的法则', sub: '引力 · 时空 · 物质与能量 · 电磁之光', ids: ['solar', 'cosmos', 'gravity', 'spacetime', 'massenergy', 'maxwell', 'emwave'] },
     { name: 'Ⅱ · 物质的语言', sub: '元素 · 分子 · 细胞 · 大脑', ids: ['periodic', 'molecule', 'animalcell', 'brain', 'photosynthesis'] },
     { name: 'Ⅲ · 规律的抽象', sub: '几何 · 谐波 · 干涉', ids: ['math', 'fourier', 'interference'] },
     { name: 'Ⅳ · 思维的光芒', sub: '认识大脑 · 理解智能体 · 硅基算力', ids: ['neural', 'aiagent', 'neuralnet', 'chip'] }
@@ -321,7 +325,7 @@
     // 快捷键按「注册顺序」定，卡片按「章节叙事顺序」排 —— 两者解耦，
     // 新增场景可以插进任意章节而不打乱已有快捷键。
     var regOrder = all.map(function (d) { return d.id; });
-    var KEYSEQ = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e', 't', 'y', 'u'];
+    var KEYSEQ = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e', 't', 'y', 'u', 'i'];
     function keyOfId(id) {
       var i = regOrder.indexOf(id);
       return i >= 0 ? (KEYSEQ[i] || '') : '';
@@ -461,6 +465,12 @@
   HL.ui.sync = function (key, value) {
     var f = ctlSync[key];
     if (f) { try { f(value); } catch (e) { /* 忽略 */ } }
+  };
+  // 讲解模式跨子场景时，先把面板记忆改掉再重建，避免回灌把子场景弹回去
+  HL.ui.setSilent = function (key, value) {
+    if (!currentId) return;
+    var st = state[currentId] || (state[currentId] = {});
+    st[key] = value;
   };
 
   function apply(def, key, value, user) {
