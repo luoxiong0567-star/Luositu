@@ -206,6 +206,7 @@ _grav_test.js              万有引力模块自测（CDP 六子场景渲染 + �
 _iso_test.js               单文件版隔离冒烟（目录页 + 全场景抽查）
 _cdp.js / _eval.js         CDP 截图与页面内断言工具（回归验证用）
 _versions/                 场景历史版本备份（如 periodicTable v1/v2）
+_embedded_src/             内嵌页补丁源副本（*.patched.html）。重跑 _build_*page.js 会覆盖补丁，以这里为准
 ```
 
 新增场景只需三步：在 `web/js/scenes/` 新建 js 文件、按 `HL.registerScene` 契约注册、在 `web/index.html` 追加一行 `<script>`。侧栏、参数面板、资源回收、快捷键全部自动生效。
@@ -226,3 +227,5 @@ _versions/                 场景历史版本备份（如 periodicTable v1/v2）
 12. **椭圆轨道不能旋转"已压缩的坐标"**——y 一旦被压扁再旋转，点会被甩出椭圆。正确做法是让角参数沿椭圆滑动：`x = cos(θ+ωt)·r, y = sin(θ+ωt)·r·k`（`k` 压扁比），最后才叠加一个固定倾角 `rot`；开普勒第三定律 `ω ∝ a^-1.5`。
 13. **场景里新增的状态变量必须声明在 `create` 阶段就会调用的函数之前**——`var` 只提升声明、不提升赋值。周期表里把 `solo` 声明写在 `buildAtom()` 后面，而 `buildAtom` 在 create 阶段就被调用，读 `solo.on` 直接抛 TypeError → `create()` 中断、`manager.inst` 为 null，而**速览的 `beginBeat` 会静默跳过所有 params**（`if (b.params && inst && inst.setParam)`），表现是"参数像没生效"却不报错。凡是"设了参数但画面不变"，先去控制台确认 `HL.manager.inst` 不为 null。
 14. **屏幕恒定大小的 Sprite 标签必须自己做避让**——`sizeAttenuation: false` 的标签不会随距离缩小，远景时必然叠在一起；用 `project(camera)` 取屏幕坐标，按 `dx²/44² + dy²/19² < 1` 椭圆阈值做距离优先的贪心剔除。动物细胞还多两层过滤：**视图白名单**（全景显示 8 个名字，特写只留本结构相关的一两个）与**安全区裁剪**（投影落进左侧栏 / 标题栏 / 参数面板的标注直接隐藏，避免被 DOM 文字压住）；抢位置时按「重要度 → 距离」排序，`细胞核` 优先于 `核仁`。
+15. **内嵌页不能把 `prefers-reduced-motion: reduce` 当成"整块停掉"**——`neuralpage.js` / `agentpage.js` 的内联页原本用 `if (!paused && !reduce)` 与 `setPaused(reduce)`，系统开启「减少动画效果」（Windows 辅助功能里关掉动画、或浏览器媒体查询命中 reduce）时，推理相位不再推进、AI-Agent 默认暂停：表现是 **INPUT 永远 0000、大屏像一张死图**，而 rAF 仍在跑、控制台没有任何报错，极难排查。降级应当是**降密度而不是停帧**：神经网络页现在照常推进，只把信号粒子生成概率降到约 1/4（`reduce ? 2.2 : 7 + 12*speed`）；AI-Agent 页默认播放（`setPaused(false)`），暗场呼吸仍由 `!reduce` 关闭。这两处只能改 base64 数据，补丁后的内联页源副本存于 `_embedded_src/*.patched.html`——**重跑 `_build_agentpage.js` / `_build_neuralpage.js` 会覆盖补丁**，必须重新打上。
+16. **验证动画"活没活"不要只看两帧截图比字节**——内嵌页有实时时钟、LATENCY 随机数，帧字节必然不同，会给出"在动"的假阳性。可靠做法是读内嵌页暴露的状态：神经网络页有 `window.__NN.state`（`step` 每 4 s +1、`phase` 每帧递增、`parts` 粒子数），AI-Agent 页要进 `#host-ops` 的 shadowRoot 读 `#feed` 首行编号。用 CDP 的 `Emulation.setEmulatedMedia({features:[{name:'prefers-reduced-motion',value:'reduce'}]})` 可以稳定复现无障碍环境。

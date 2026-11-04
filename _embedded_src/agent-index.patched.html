@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AI-Agent 神经网络思维调用展示</title>
+<style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}[hidden]{display:none!important}</style>
+</head>
+<body>
+<style>
+/* Layout: 单一大屏 —— 仅 OPS 纸面工程，无主题切换。 */
+:root{color-scheme:dark;--page:#07080d}
+html,body{height:100%}
+body{background:var(--page);overflow:hidden}
+.th-host{position:relative;height:100%}
+</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+<div class="th-host" id="host-ops" hidden></div>
+
+
+<!-- ===== OPS 纸面工程 · 调度大屏 ===== -->
+<template id="tpl-ops">
+<style>
+/* Layout: 纸面工程图式大屏 —— 顶部指标轨 + 圆心偏左的大弧舞台（静止的汇聚连线 / 快速旋转的飞轮：环带数据块 + 外射谱线）+ 底部 2×4 仪表面板。浅色 = 纸与墨，深色 = 夜间科技蓝（与神经网络推理页同源） */
+:host{
+  --bg:#eeede8; --panel:#f6f5f1; --band:#eeede8;
+  --ink:#151515; --ink2:#4a4a46; --mute:#86857f; --hair:#d2d0c9; --hair2:#e4e2dc;
+  --accent:#151515; --bar:#151515; --chip-fg:#f6f5f1; --scan:transparent;
+  --c-line:#151515; --c-hi:#000000; --c-hot:#000000; --c-text:#1a1a1a; --c-dim:#7d7c77;
+  --font:"JetBrains Mono","Noto Sans SC",ui-monospace,Menlo,monospace;
+  --cjk:"Noto Sans SC","JetBrains Mono",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:host(:not([data-theme="light"])){
+  --bg:#04080f; --panel:#071527; --band:#050f1d;
+  --ink:#dcf3ff; --ink2:#9fc4d8; --mute:#5f8199; --hair:#17384d; --hair2:#0c1c28;
+  --accent:#45e6f5; --bar:#4f9dff; --chip-fg:#031018; --scan:rgba(69,230,245,.022);
+  --c-line:#4f9dff; --c-hi:#eafaff; --c-hot:#45e6f5; --c-text:#a8d0e6; --c-dim:#3d6b86;
+  color-scheme:dark }}
+:host([data-theme="dark"]){
+  --bg:#04080f; --panel:#071527; --band:#050f1d;
+  --ink:#dcf3ff; --ink2:#9fc4d8; --mute:#5f8199; --hair:#17384d; --hair2:#0c1c28;
+  --accent:#45e6f5; --bar:#4f9dff; --chip-fg:#031018; --scan:rgba(69,230,245,.022);
+  --c-line:#4f9dff; --c-hi:#eafaff; --c-hot:#45e6f5; --c-text:#a8d0e6; --c-dim:#3d6b86;
+  color-scheme:dark }
+
+:host{display:block;height:100%;overflow:auto}
+[hidden]{display:none!important}
+:host{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:11px;-webkit-font-smoothing:antialiased}
+.app{min-height:100%;box-sizing:border-box;display:grid;grid-template-rows:minmax(440px,1fr) auto;gap:10px;padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* 顶部指标轨 */
+.top{position:absolute;z-index:3;left:0;top:0;display:grid;grid-template-columns:repeat(3,minmax(86px,auto));gap:12px 26px;align-items:end;padding:14px 48px 34px 16px;pointer-events:none;text-shadow:0 0 2px var(--bg),0 0 6px var(--bg),0 0 12px var(--bg);background:radial-gradient(farthest-side at 0 0,color-mix(in srgb,var(--bg) 82%,transparent),color-mix(in srgb,var(--bg) 45%,transparent) 62%,transparent)}
+.top .title{grid-column:1 / -1}
+.cell{position:relative;min-width:0;padding-bottom:7px;border-bottom:1px solid var(--hair)}
+.stat{min-width:86px}
+.cell::after{content:"";position:absolute;left:0;bottom:-1px;height:3px;width:0;background:var(--accent);transition:width .9s ease}
+.cell.on::after{width:100%}
+.title::after{width:100%;height:2px;background:var(--ink)}
+.title h1{margin:0;font-weight:800;font-size:clamp(16px,1.5vw,23px);letter-spacing:.02em;line-height:1.1;white-space:nowrap}
+.title h1 .zh{font-family:var(--cjk);font-weight:700;letter-spacing:.04em}
+.title p{margin:5px 0 0;font-size:8.5px;letter-spacing:.14em;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title p b{color:var(--ink2);font-weight:500;font-variant-numeric:tabular-nums}
+.stat .k{display:block;font-size:8px;letter-spacing:.16em;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .k i{font-style:normal;font-family:var(--cjk);letter-spacing:.04em;margin-left:5px}
+.stat .v{display:block;margin-top:6px;font-size:clamp(13px,1.05vw,16px);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .v small{color:var(--mute);font-size:.78em}
+.ctls{position:absolute;z-index:4;top:14px;right:14px;display:flex;gap:6px}
+.btn{font:inherit;font-size:10px;letter-spacing:.1em;color:var(--ink);background:transparent;border:1px solid var(--mute);padding:5px 10px;cursor:pointer;white-space:nowrap;font-family:var(--cjk)}
+.btn:hover{border-color:var(--ink)}
+.btn:focus-visible,.seg button:focus-visible,#pc:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+
+/* 光线速度控件 */
+.ctls{align-items:center}
+.spd{position:relative;display:flex;align-items:center;gap:7px;border:1px solid var(--mute);padding:3px 4px 3px 8px;height:24px;box-sizing:border-box}
+.spd-k{font-family:var(--cjk);font-size:9.5px;letter-spacing:.08em;color:var(--mute);white-space:nowrap}
+.spd-k b{margin-left:5px;color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+.spd-r{-webkit-appearance:none;appearance:none;width:66px;height:12px;background:transparent;cursor:pointer;margin:0}
+.spd-r::-webkit-slider-runnable-track{height:2px;background:var(--hair)}
+.spd-r::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:12px;margin-top:-5px;background:var(--ink);border:0;border-radius:1px}
+.spd-r::-moz-range-track{height:2px;background:var(--hair)}
+.spd-r::-moz-range-thumb{width:8px;height:12px;background:var(--ink);border:0;border-radius:1px}
+.spd-r:focus-visible{outline:1px solid var(--accent);outline-offset:3px}
+.spd-q{width:16px;height:18px;padding:0;line-height:1;font-size:9px;border-color:transparent;color:var(--mute)}
+.spd-q:hover{border-color:var(--mute);color:var(--ink)}
+.spd-q-menu{position:absolute;z-index:5;top:calc(100% + 4px);right:0;display:grid;min-width:96px;background:var(--panel);border:1px solid var(--ink);box-shadow:3px 3px 0 color-mix(in srgb,var(--ink) 14%,transparent)}
+.spd-q-menu button{font:inherit;font-size:9.5px;font-family:var(--cjk);letter-spacing:.06em;text-align:left;padding:5px 9px;background:transparent;border:0;color:var(--ink);cursor:pointer;white-space:nowrap;display:flex;justify-content:space-between;gap:10px}
+.spd-q-menu button:hover{background:var(--hair2)}
+.spd-q-menu button.on{font-weight:700}
+.spd-q-menu button.on::after{content:"●";font-size:7px;color:var(--accent)}
+
+/* 舞台 */
+.stage{position:relative;min-height:0;overflow:hidden;background:var(--bg)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stage::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,var(--scan) 0 1px,transparent 1px 3px)}
+.note{position:absolute;z-index:2;right:14px;bottom:14px;display:grid;gap:4px;min-width:220px;border-left:2px solid var(--ink);padding:4px 4px 4px 12px;pointer-events:none;text-shadow:0 0 2px var(--bg),0 0 6px var(--bg),0 0 12px var(--bg)}
+.note .nh{font-size:8px;letter-spacing:.14em;color:var(--mute);border-bottom:1px solid var(--hair);padding-bottom:5px;white-space:nowrap}
+.note b{font-size:12.5px;font-weight:500;letter-spacing:.02em;font-variant-numeric:tabular-nums;font-family:var(--font);white-space:nowrap}
+.note .ns{font-size:9px;color:var(--mute);font-family:var(--cjk)}
+.hud{position:absolute;z-index:2;right:14px;bottom:96px;display:grid;gap:3px;border-left:2px solid var(--ink);padding:3px 4px 3px 12px;font-size:8.5px;letter-spacing:.1em;color:var(--mute);white-space:nowrap;pointer-events:none;text-shadow:0 0 2px var(--bg),0 0 6px var(--bg),0 0 12px var(--bg)}
+.hud b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+.hud .warn{color:var(--accent);font-weight:700}
+.tip{position:absolute;z-index:3;pointer-events:none;background:var(--panel);border:1px solid var(--ink);padding:6px 9px;font-size:10.5px;line-height:1.55;font-family:var(--cjk);max-width:250px}
+.tip b{font-family:var(--font);font-weight:700;margin-right:6px}
+.tip span{display:block;color:var(--mute);font-family:var(--font);font-size:9px}
+
+/* 面板 */
+.panels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.panel{min-width:0;height:184px;box-sizing:border-box;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--hair);padding:9px 11px 8px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;min-width:0}
+.ph h2{margin:0;font-size:9px;font-weight:800;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ph h2 i{font-style:normal;font-family:var(--cjk);font-weight:500;color:var(--mute);letter-spacing:.06em;margin-left:6px}
+.ph span{font-size:8.5px;color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pb{flex:1;min-height:0;position:relative;overflow:hidden}
+.pb canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.pf{margin-top:6px;font-size:8px;letter-spacing:.1em;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf b{color:var(--ink);font-weight:500}
+
+.feed{list-style:none;margin:0;padding:0;height:100%;font-size:9.5px;line-height:13.5px}
+.feed li{display:grid;grid-template-columns:2.4em 3.4em minmax(0,1fr);gap:8px;white-space:nowrap}
+.feed .n{color:var(--mute);font-variant-numeric:tabular-nums}
+.feed .vb{color:var(--ink2)}
+.feed .d{overflow:hidden;text-overflow:ellipsis;font-family:var(--cjk)}
+.feed li:last-child{font-weight:700}
+.feed li:last-child .d{font-weight:700}
+
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:7px}
+.seg button{font:inherit;font-size:8px;letter-spacing:.14em;padding:4px 0;border:1px solid var(--hair);background:transparent;color:var(--ink2);cursor:pointer}
+.seg button:hover{border-color:var(--ink)}
+.seg button.on{background:var(--ink);border-color:var(--ink);color:var(--chip-fg)}
+#pc{cursor:crosshair}
+
+.code{margin:0;height:100%;font-size:9.5px;line-height:13px;overflow:hidden}
+.code .row{display:block;white-space:pre}
+.code .row.cur{background:var(--hair2)}
+.code .ln{color:var(--mute);margin-right:12px;user-select:none}
+.code .kw{font-weight:800}
+.code .str{color:var(--ink2)}
+.code .cm{color:var(--mute)}
+.caret{display:inline-block;width:.6em;height:11px;vertical-align:-2px;background:var(--ink);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+.agents{list-style:none;margin:0;padding:0;height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(6,minmax(0,1fr));grid-auto-flow:column;column-gap:16px}
+.agents li{display:grid;grid-template-columns:1.7em 2.3em minmax(0,1fr);gap:6px;align-items:center;font-size:9.5px;min-width:0}
+.agents .n{color:var(--mute);font-variant-numeric:tabular-nums}
+.agents .r{font-family:var(--cjk)}
+.agents li.idle .r{color:var(--mute)}
+.agents .b{display:grid;gap:2px;min-width:0}
+.agents .b b{display:block;height:5px;background:var(--hair2);position:relative;overflow:hidden}
+.agents .b b i{position:absolute;left:0;top:0;bottom:0;background:var(--bar);transition:width .6s ease}
+.agents .b small{font-size:7.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.04em}
+
+@media (max-width:1100px){
+  .panels{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:640px){
+  .app{grid-template-rows:auto auto}
+  .top{right:0;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 14px;padding:10px 10px 18px}
+  .top .title{box-sizing:border-box;padding-right:178px}
+  .stat{min-width:0}
+  .ctls{right:10px;top:10px}
+  .stage{height:150vw;max-height:720px}
+  .note{right:10px;bottom:10px;min-width:0;max-width:calc(100% - 20px);box-sizing:border-box}
+  .hud{display:none}
+  .panels{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){.cell::after{transition:none}.caret{animation:none}}
+
+/* 系列水印：贴着舞台左下角，和图上的小标签同一套字 */
+.wm{position:absolute;z-index:2;left:16px;bottom:12px;font-family:var(--font);font-size:8px;letter-spacing:.18em;color:var(--mute);opacity:.62;pointer-events:none;white-space:nowrap;text-shadow:0 0 2px var(--bg),0 0 6px var(--bg)}
+</style>
+<div class="app">
+  <main class="stage" id="stage">
+  <header class="top">
+    <div class="cell title">
+      <h1>AI-Agent <span class="zh">神经网络思维调用展示</span></h1>
+      <p>NEURAL TRACE → TOOL CALL → OUTPUT · 示例数据 · <b id="clock">--</b></p>
+    </div>
+    <div class="cell stat"><span class="k">TASKS<i>任务</i></span><span class="v" id="s0">64</span></div>
+    <div class="cell stat"><span class="k">AGENTS<i>智能体</i></span><span class="v" id="s1">12</span></div>
+    <div class="cell stat"><span class="k">WORKFLOWS<i>工作流</i></span><span class="v" id="s2">11</span></div>
+    <div class="cell stat"><span class="k">OUTPUTS<i>产出</i></span><span class="v" id="s3">0</span></div>
+    <div class="cell stat"><span class="k">MATCHED<i>已匹配</i></span><span class="v" id="s4">0</span></div>
+    <div class="cell stat"><span class="k">PENDING<i>待复核</i></span><span class="v" id="s5">0</span></div>
+  </header>
+  <div class="ctls">
+    <div class="spd" role="group" aria-label="光线速度">
+      <span class="spd-k">光线<b id="spdV">2.2×</b></span>
+      <input class="spd-r" id="spd" type="range" min="0" max="4" step="1" value="2"
+             aria-label="光线运动速度" aria-valuetext="2.2 倍">
+      <button class="btn spd-q" id="spdq" type="button" aria-label="预设速度">⌄</button>
+      <div class="spd-q-menu" id="spdQ" hidden></div>
+    </div>
+    <button class="btn" id="theme" type="button">夜间</button>
+    <button class="btn" id="pause" type="button" aria-pressed="false">暂停</button>
+  </div>
+    <canvas id="sc" aria-label="调度主视图：左侧连线汇聚到三个工作流节点，中间旋转环带滚动执行记录，右侧旋转谱线表示输出流"></canvas>
+    <div class="hud"><span>STABILITY CHECK · 稳定性</span><span>CFL = |u|·Δt/Δx = <b id="cfl">0.00</b> <span id="cflst">OK</span></span></div>
+    <div class="note"><span class="nh">WORKFLOW / REVIEW STATE</span><b id="noteMain">— / 11 已匹配</b><span class="ns">— 每条结果都能追溯到来源</span></div>
+    <div class="tip" id="tip" hidden></div>
+    <div class="wm">DEVELOP BY @赛博老爸</div>
+  </main>
+
+  <section class="panels">
+    <article class="panel">
+      <div class="ph"><h2>TASK FEED<i>任务流</i></h2><span>64 tasks</span></div>
+      <div class="pb"><ol class="feed" id="feed"></ol></div>
+    </article>
+    <article class="panel">
+      <div class="ph"><h2>ADVECTION / PARTICLE SOLVER<i>粒子求解</i></h2><span id="stepN">step 561</span></div>
+      <div class="pb" id="pcBox"><canvas id="pc" tabindex="0" aria-label="粒子流场，点击加入涡流"></canvas></div>
+      <div class="seg" role="group" aria-label="求解模式">
+        <button type="button" data-m="advect" class="on">ADVECT</button>
+        <button type="button" data-m="project">PROJECT</button>
+        <button type="button" data-m="rerun">RERUN</button>
+      </div>
+    </article>
+    <article class="panel">
+      <div class="ph"><h2>WORKSPACE<i>执行代码</i></h2><span id="codeMeta">python</span></div>
+      <div class="pb"><pre class="code" id="code"></pre></div>
+    </article>
+    <article class="panel">
+      <div class="ph"><h2>12 AGENTS / DISPATCH<i>调度</i></h2><span id="agMeta">0 idle</span></div>
+      <div class="pb"><ul class="agents" id="agents"></ul></div>
+      <div class="pf">independent jobs / shared event bus</div>
+    </article>
+  </section>
+</div>
+</template>
+
+
+<script>
+/* ===== OPS 纸面工程 ===== */
+function mountOps(host, SR){
+'use strict';
+
+/* ================= 1. 数据配置（换成你自己的内容即可） ================= */
+const CONFIG = {
+  agents: [['01','检索'],['02','拆解'],['03','文案'],['04','设计'],['05','代码'],['06','测试'],
+           ['07','审校'],['08','数据'],['09','剪辑'],['10','投放'],['11','客服'],['12','归档']],
+  taskNames: ['竞品资料检索','需求拆解','短视频脚本','封面图六版','落地页改版','接口联调','合同条款审校','周报数据汇总',
+              '投标文件生成','私域话术更新','素材归档','发版检查','用户反馈聚类','广告素材测试','知识库更新','直播切片'],
+  workflows: ['资料检索','需求拆解','脚本生成','视觉设计','代码实现','测试验证','合规审校','数据汇总','视频剪辑','投放优化','知识归档'],
+  // 执行代码面板：多套示例，随机轮换，一轮内不重复。agent = 对应 agents 的序号（0 起）
+  codeSets: [
+    {file: 'dispatch.py', agent: 1, start: 7, lines: [
+      "# 每日调度：拆任务、派给智能体",
+      "tasks = load_queue('今日')",
+      "plan = split(tasks, by='skill')",
+      "for step in plan:",
+      "    agent = dispatch(step.skill)",
+      "    out = agent.run(step)",
+      "    if review(out) < 0.8:",
+      "        out = agent.revise(out)",
+      "    board.attach(step.id, out)"]},
+    {file: 'retrieve.py', agent: 0, start: 18, lines: [
+      "# 竞品资料检索",
+      "def retrieve(topic, k=20):",
+      "    hits = search.web(topic, top=k)",
+      "    docs = [fetch(h.url) for h in hits]",
+      "    docs = dedupe(docs, by='title')",
+      "    notes = summarize(docs, lang='zh')",
+      "    kb.save(topic, notes)",
+      "    return notes"]},
+    {file: 'script.py', agent: 2, start: 31, lines: [
+      "# 短视频脚本：钩子 + 正文 + 互动",
+      "def write_script(topic, pains):",
+      "    hook = pick_hook(pains, max_s=5)",
+      "    body = outline(topic, beats=4)",
+      "    cta = ask_for_comment(topic)",
+      "    draft = llm.write(hook, body, cta)",
+      "    return polish(draft, tone='口语')"]},
+    {file: 'cover.py', agent: 3, start: 42, lines: [
+      "# 封面图六版，挑最佳",
+      "specs = brief.cover_specs()",
+      "imgs = []",
+      "for i in range(6):",
+      "    imgs.append(img.gen(specs, seed=i))",
+      "scores = [rate(x, specs) for x in imgs]",
+      "best = imgs[argmax(scores)]",
+      "export(best, size='1080x1440')"]},
+    {file: 'tender.py', agent: 6, start: 56, lines: [
+      "# 投标文件：按甲方要求逐条响应",
+      "reqs = parse_tender('招标文件.pdf')",
+      "doc = Template('投标模板.docx')",
+      "for r in reqs:",
+      "    ans = draft_response(r, kb)",
+      "    doc.fill(r.id, ans)",
+      "missing = doc.check_required(reqs)",
+      "assert not missing, missing",
+      "doc.save('投标文件_v3.docx')"]},
+    {file: 'weekly.py', agent: 7, start: 64, lines: [
+      "# 周报数据汇总",
+      "rows = db.query('tasks', week=42)",
+      "done = [r for r in rows if r.done]",
+      "rate = len(done) / len(rows)",
+      "chart = plot.bar(group(done, 'agent'))",
+      "report.add('完成率', f'{rate:.0%}')",
+      "report.add_chart(chart)",
+      "report.send(to='周报群')"]},
+    {file: 'preflight.py', agent: 5, start: 77, lines: [
+      "# 发版前检查",
+      "def preflight(build):",
+      "    tests = run_tests(build, fast=True)",
+      "    if tests.failed:",
+      "        return block(tests.failed)",
+      "    diff = compare(build, last_release)",
+      "    if diff.risk > 0.3:",
+      "        return ask_review(diff)",
+      "    return approve(build)"]},
+    {file: 'ads_ab.py', agent: 9, start: 88, lines: [
+      "# 广告素材测试：小预算跑 AB",
+      "variants = load_creatives('第3批')",
+      "for v in variants:",
+      "    ads.launch(v, budget=200)",
+      "wait(hours=24)",
+      "stats = ads.report(variants)",
+      "win = max(stats, key=lambda s: s.ctr)",
+      "ads.scale(win, budget=2000)"]},
+    {file: 'archive.py', agent: 11, start: 95, lines: [
+      "# 素材归档与知识库更新",
+      "files = scan('素材/本周')",
+      "for f in files:",
+      "    tags = vision.tag(f)",
+      "    kb.index(f, tags=tags)",
+      "    move(f, to=f'归档/{tags[0]}')",
+      "log.info(f'归档 {len(files)} 个文件')"]}
+  ]
+};
+const CODEBITS = ['eqs = extract(spec.p)','solve(grid, dt=0.004)','log(claim, consts)','assert stable(state)','check_mass(state, ref)',
+  'flag(blind_spots)','drift = compare(out, ref)','rerun(scene_07)','cite(page=12)','metric = spec.metric()','state = step(inputs)',
+  'out = agent.run(step)','score = review(out)','board.attach(id, out)','route(task, skill)','queue.push(task)'];
+
+/* 飞轮转速（弧度/秒），越大转得越快 */
+const SPIN = 0.16;
+/* 光线运动倍率：汇聚光脉冲 / 谱线亮段的滑动速度乘数（可由右上角速度控件调整） */
+const MOTION_STEPS = [1, 1.5, 2.2, 3, 4.2];
+let MOTION = 2.2;
+
+/* ================= 2. 工具 ================= */
+const $ = s => SR.querySelector(s);
+const TAU = Math.PI * 2;
+const FONT = '"JetBrains Mono","Noto Sans SC",ui-monospace,Menlo,monospace';
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const darkMQ = matchMedia('(prefers-color-scheme: dark)');
+const root = host;
+/* 默认夜间模式：首屏即为科技蓝夜间配色（右上角按钮可切回纸面配色） */
+if (!root.dataset.theme) root.dataset.theme = 'dark';
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const pick = (rr, a) => a[(rr() * a.length) | 0];
+const pad2 = n => String(n).padStart(2, '0');
+const hms = d => `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+const wrapPI = a => ((a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+const rgba = (hex, a) => { let h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+function fitCv(cv, ctx){ const r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2); const w = Math.max(1, r.width), h = Math.max(1, r.height); cv.width = Math.round(w * d); cv.height = Math.round(h * d); ctx.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+function qd(c, q){ c.beginPath(); c.moveTo(q.x1, q.y1); c.quadraticCurveTo(q.cx, q.cy, q.x2, q.y2); c.stroke(); }
+function bez(q, u){ const v = 1 - u; return [v*v*q.x1 + 2*v*u*q.cx + u*u*q.x2, v*v*q.y1 + 2*v*u*q.cy + u*u*q.y2]; }
+
+/* 主题：颜色全部来自 CSS 变量 */
+let T = {};
+const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : darkMQ.matches;
+function readTheme(){
+  const cs = getComputedStyle(root), g = n => cs.getPropertyValue(n).trim();
+  T = {dark: isDark(), bg: g('--bg'), panel: g('--panel'), band: g('--band'), ink: g('--ink'), ink2: g('--ink2'), mute: g('--mute'),
+       hair: g('--hair'), hair2: g('--hair2'), line: g('--c-line'), hi: g('--c-hi'), hot: g('--c-hot'), text: g('--c-text'), dim: g('--c-dim')};
+  T.cell = T.dark ? T.ink2 : T.ink;
+  themeBtn.textContent = T.dark ? '纸面' : '夜间';
+  themeBtn.setAttribute('aria-label', T.dark ? '切换到纸面配色' : '切换到夜间配色');
+}
+
+/* ================= 3. 模拟引擎（接真实数据时替换这一段） ================= */
+const R = mulberry32(20261016);
+const NA = CONFIG.agents.length, NW = CONFIG.workflows.length;
+const tasks = Array.from({length: 64}, (_, i) => ({i, id: 'T-' + String(i + 1).padStart(3, '0'),
+  name: CONFIG.taskNames[(R() * CONFIG.taskNames.length) | 0], wf: (R() * NW) | 0, prog: 0, state: 'queued', agent: -1}));
+const agents = CONFIG.agents.map(([code, name], i) => ({i, code, name, task: -1}));
+const wfs = CONFIG.workflows.map((name, i) => ({i, id: 'W' + pad2(i + 1), name, q: 0, cells: Array.from({length: 16}, () => R())}));
+[0.91, 0.86, 0.72, 0.88, 0.84, 0.69, 0.93, 0.82, 0.74, 0.87, 0.71].forEach((q, i) => wfs[i].q = q);
+const order = tasks.map(t => t.i);
+for (let i = order.length - 1; i > 0; i--) { const j = (R() * (i + 1)) | 0; [order[i], order[j]] = [order[j], order[i]]; }
+order.slice(0, 22).forEach(i => { tasks[i].state = 'done'; tasks[i].prog = 1; });
+order.slice(22, 32).forEach((i, k) => { const t = tasks[i]; t.state = 'run'; t.prog = 0.06 + R() * 0.85; t.agent = k; agents[k].task = i; });
+
+const running = () => agents.filter(a => a.task >= 0).length;
+const doneCount = () => tasks.filter(t => t.state === 'done').length;
+const matched = () => wfs.filter(w => w.q >= 0.8).length;
+
+let logN = 38;
+const feed = [];
+const VERB = {read: '读取', build: '生成', check: '核验', review: '复核'};
+function log(verb, t){ feed.push({n: logN++, verb, text: `${VERB[verb]} ${t.name}`}); if (feed.length > 30) feed.shift(); }
+order.slice(8, 20).forEach((i, k) => log(['read', 'build', 'check', 'review'][k % 4], tasks[i]));
+
+function step(){
+  for (const a of agents) {
+    if (a.task < 0) continue;
+    const t = tasks[a.task];
+    t.prog = Math.min(1, t.prog + 0.03 + Math.random() * 0.08);
+    if (t.prog >= 1) { t.state = 'done'; t.agent = -1; a.task = -1; log(Math.random() < 0.5 ? 'check' : 'review', t); }
+  }
+  for (const a of agents) {
+    if (a.task >= 0 || Math.random() > 0.4) continue;
+    const q = tasks.filter(t => t.state === 'queued');
+    if (!q.length) break;
+    const t = q[(Math.random() * q.length) | 0];
+    t.state = 'run'; t.agent = a.i; t.prog = 0.02; a.task = t.i; log(Math.random() < 0.5 ? 'read' : 'build', t);
+  }
+  const done = tasks.filter(t => t.state === 'done');
+  if (done.length > 54) for (let k = 0; k < 18; k++) { const t = done[(Math.random() * done.length) | 0]; t.state = 'queued'; t.prog = 0; }
+  const w = wfs[(Math.random() * NW) | 0];
+  w.q = Math.max(0.6, Math.min(0.97, w.q + (Math.random() - 0.38) * 0.05));
+  w.cells[(Math.random() * 16) | 0] = Math.random();
+  renderAll();
+}
+
+/* ================= 4. DOM 面板 ================= */
+const themeBtn = $('#theme'), pauseBtn = $('#pause');
+const feedEl = $('#feed'), agentsEl = $('#agents'), codeEl = $('#code');
+
+function renderStats(){
+  const run = running(), m = matched();
+  $('#s1').innerHTML = `${run} <small>/ ${NA}</small>`;
+  $('#s3').textContent = doneCount();
+  $('#s4').innerHTML = `${m} <small>/ ${NW}</small>`;
+  $('#s5').textContent = NW - m;
+  $('#noteMain').textContent = `${m} / ${NW} 已匹配 · ${NW - m} 待复核`;
+  $('#agMeta').textContent = `${NA - run} idle`;
+}
+function renderFeed(){
+  const n = Math.max(4, Math.floor(feedEl.clientHeight / 13.5));
+  feedEl.innerHTML = feed.slice(-n).map(e => `<li><span class="n">${String(e.n).padStart(3, '0')}</span><span class="vb">${e.verb}</span><span class="d">${e.text}</span></li>`).join('');
+}
+function renderAgents(){
+  agentsEl.innerHTML = agents.map(a => {
+    const t = a.task >= 0 ? tasks[a.task] : null;
+    const st = t ? `${t.id} · ${t.prog < 0.35 ? 'reading' : t.prog < 0.75 ? 'working' : 'review'}` : 'idle';
+    return `<li class="${t ? 'busy' : 'idle'}"><span class="n">${a.code}</span><span class="r">${a.name}</span><span class="b"><b><i style="width:${t ? Math.max(4, t.prog * 100).toFixed(0) : 0}%"></i></b><small>${st}</small></span></li>`;
+  }).join('');
+}
+function renderAll(){ renderStats(); renderFeed(); renderAgents(); if (hoverHub >= 0) showTip(); }
+
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const hl = s => s.trim().startsWith('#') ? `<span class="cm">${esc(s)}</span>`
+  : esc(s).replace(/('[^']*'?)/g, '<span class="str">$1</span>').replace(/\b(for|in|if|def|return|not|assert|lambda)\b/g, '<span class="kw">$1</span>');
+
+/* 执行代码：逐字打出一套，停顿后换另一套；一轮内不重复，也不会连着出现同一套 */
+let codeOrder = [], codeIdx = -1, cset = null, cl = 0, cc = 0, hold = 0, linePause = 0;
+function nextCodeSet(){
+  if (!codeOrder.length) {
+    codeOrder = CONFIG.codeSets.map((_, i) => i).filter(i => i !== codeIdx);
+    for (let i = codeOrder.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [codeOrder[i], codeOrder[j]] = [codeOrder[j], codeOrder[i]]; }
+  }
+  codeIdx = codeOrder.shift();
+  cset = CONFIG.codeSets[codeIdx]; cl = 0; cc = 0; hold = 0; linePause = 0;
+  const a = agents[cset.agent] || agents[0];
+  $('#codeMeta').textContent = `${cset.file} · ${a.code} ${a.name}`;
+}
+function renderCode(){
+  const fit = Math.max(4, Math.floor(codeEl.clientHeight / 13));
+  let html = '';
+  for (let i = Math.max(0, cl - fit + 1); i <= cl; i++) {
+    const txt = i < cl ? cset.lines[i] : cset.lines[i].slice(0, cc);
+    html += `<span class="row${i === cl ? ' cur' : ''}"><span class="ln">${String(i + cset.start).padStart(3, '0')}</span>${hl(txt)}${i === cl ? '<span class="caret"></span>' : ''}</span>`;
+  }
+  codeEl.innerHTML = html;
+}
+function typeTick(){
+  if (hold > 0) { if (--hold === 0) nextCodeSet(); renderCode(); return; }
+  if (linePause > 0) { linePause--; return; }
+  cc += Math.random() < 0.3 ? 2 : 1;
+  if (cc >= cset.lines[cl].length) {
+    cc = cset.lines[cl].length;
+    if (cl < cset.lines.length - 1) { renderCode(); cl++; cc = 0; linePause = 5; }
+    else hold = 60;
+  }
+  renderCode();
+}
+
+/* ================= 5. 主舞台 ================= */
+const stage = $('#stage'), sc = $('#sc'), sctx = sc.getContext('2d'), tip = $('#tip');
+let W = 1, H = 1, DPR = 1, G = null, layThreads = null, layRing = null;
+let hubs = [], pulses = [], blocks = [], streaks = [], blockFS = 8, blockLH = 11;
+let hoverHub = -1, needs = true, stageDirty = true, panelsNeed = true;
+const hubWf = [4, 0, 8], hubCh = [-10, -10, -10];   // 三个汇聚节点当前对应的工作流、上次切换时间
+let hubTurn = 0;
+const ax = (Rr, y) => G.cx + Math.sqrt(Math.max(0, Rr * Rr - (y - G.cy) * (y - G.cy)));
+const visAng = (Rr, pad) => Math.asin(Math.min(1, (Math.max(G.cy, H - G.cy) + pad) / Rr));
+function mkLayer(){ const cv = document.createElement('canvas'); cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); const c = cv.getContext('2d'); c.setTransform(DPR, 0, 0, DPR, 0, 0); return [cv, c]; }
+function bloom(cv, c, amount){
+  if (!T.dark || typeof c.filter !== 'string') return;
+  const g = document.createElement('canvas'); g.width = cv.width; g.height = cv.height;
+  const gc = g.getContext('2d'); gc.filter = `blur(${3 * DPR}px)`; gc.drawImage(cv, 0, 0);
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'lighter'; c.globalAlpha = amount; c.drawImage(g, 0, 0); c.restore();
+}
+
+function layoutStage(){
+  const r = sc.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  sc.width = Math.round(W * DPR); sc.height = Math.round(H * DPR);
+  const narrow = W < 700;
+  const R1 = narrow ? Math.max(H * 0.8, W * 0.85) : Math.max(H * 0.72, W * 0.24);
+  const cx = W * (narrow ? 0.36 : 0.40) - R1;
+  G = {cx, cy: H * 0.5 + (narrow ? 70 : 22), R1, R2: R1 + W * (narrow ? 0.26 : 0.22), narrow};
+  buildStreaks(); buildThreads(); buildRing(); buildBlocks();
+}
+
+/* --- 飞轮谱线：整圈生成，每帧只画可见扇区 --- */
+function buildStreaks(){
+  const rr = mulberry32(5), thVis = visAng(G.R2, 30);
+  const density = (G.narrow ? 420 : 1100) / (2 * thVis);
+  streaks = [];
+  const mk = (th, Lc, hot) => {
+    const s = {th: ((th % TAU) + TAU) % TAU, off: 20 + rr() * 4, f: Lc * (0.7 + rr() * 0.42), b: (rr() * 4) | 0, hot, d: []};
+    const nd = rr() < 0.42 ? 1 + ((rr() * 2) | 0) : 0;
+    for (let i = 0; i < nd; i++) s.d.push({p: rr() * 0.92, len: 4 + rr() * 34, v: 0});
+    if (rr() < 0.3) s.d.push({p: rr(), len: 5 + rr() * 20, v: 0.05 + rr() * 0.22});
+    streaks.push(s);
+  };
+  let a = 0;
+  while (a < TAU) {
+    const spread = 0.008 + rr() * 0.045, n = Math.round(spread * 2 * density * (0.6 + rr() * 0.9));
+    const Lc = 0.28 + rr() * 0.72, hot = rr() < 0.14;
+    for (let j = 0; j < n; j++) mk(a + (rr() * 2 - 1) * spread, Lc, hot);
+    a += spread * 2 + rr() * 0.05;
+  }
+  const nl = Math.round(density * 0.25 * TAU);
+  for (let j = 0; j < nl; j++) mk(rr() * TAU, 0.15 + rr() * 0.85, false);
+}
+
+function buildThreads(){
+  const [cv, c] = mkLayer(), rr = mulberry32(99), {cx, cy, R1, narrow} = G;
+  const k = narrow ? 0.5 : 1, A = T.dark ? 1.3 : 1;
+  const inner = y => ax(R1, y);
+  const rp = (padR = 8) => { const y = rr() * H; return [rr() * Math.max(10, inner(y) - padR), y]; };
+  c.save(); c.beginPath(); c.arc(cx, cy, R1 - 1, 0, TAU); c.clip();
+  c.lineCap = 'round'; c.strokeStyle = T.line;
+  for (let i = 0; i < Math.round(360 * k); i++) {
+    const [x1, y1] = rp(), [x2, y2] = rp();
+    c.globalAlpha = Math.min(1, (0.05 + rr() * 0.2) * A); c.lineWidth = 0.45 + rr() * 0.5;
+    c.beginPath(); c.moveTo(x1, y1); c.quadraticCurveTo((x1 + x2) / 2 + (rr() - 0.5) * 90, (y1 + y2) / 2 + (rr() - 0.5) * 90, x2, y2); c.stroke();
+  }
+  for (let i = 0; i < Math.round(22 * k); i++) {
+    const rad = 200 + rr() * 900, a0 = rr() * TAU;
+    c.globalAlpha = (0.08 + rr() * 0.16) * A; c.lineWidth = 0.6;
+    c.beginPath(); c.arc(rr() * W * 0.4 - rad * 0.3, rr() * H, rad, a0, a0 + 0.3 + rr() * 0.8); c.stroke();
+  }
+  hubs = [];
+  (narrow ? [-0.2, 0.07, 0.3] : [-0.33, 0.01, 0.34]).forEach((off, h) => {
+    const y = cy + H * off, x = inner(y) - 3, hub = {x, y, curves: [], wf: [4, 0, 8][h]};
+    const n = Math.round((narrow ? 40 : 80) + rr() * 30);
+    for (let i = 0; i < n; i++) {
+      const sy = y + (rr() - 0.5) * H * 1.1, sx = rr() * Math.max(20, x - 60);
+      const q = {x1: sx, y1: sy, cx: x - (x - sx) * (0.18 + rr() * 0.25), cy: y + (sy - y) * (0.02 + rr() * 0.18), x2: x, y2: y + (rr() - 0.5) * 3};
+      hub.curves.push(q);
+      c.strokeStyle = T.dark && rr() < 0.22 ? T.hi : T.line;
+      c.globalAlpha = Math.min(1, (0.14 + rr() * 0.5) * A); c.lineWidth = 0.45 + rr() * 0.7; qd(c, q);
+    }
+    c.strokeStyle = T.dark ? T.hi : T.line; c.globalAlpha = 1; c.lineWidth = 3.2;
+    c.beginPath(); c.moveTo(x - 16, y); c.lineTo(x + 1, y); c.stroke();
+    hubs.push(hub);
+  });
+  c.strokeStyle = T.line; c.fillStyle = T.line; c.lineWidth = 0.8;
+  for (let i = 0; i < Math.round(28 * k); i++) { const [x, y] = rp(20), s = 3 + rr() * 3; c.globalAlpha = 0.7 * A; c.strokeRect(x - s / 2, y - s / 2, s, s); }
+  for (let i = 0; i < Math.round(14 * k); i++) { const [x, y] = rp(20); c.globalAlpha = 0.6 * A; c.beginPath(); c.arc(x, y, 2.5 + rr() * 6, 0, TAU); c.stroke(); }
+  for (let i = 0; i < Math.round(16 * k); i++) { const [x, y] = rp(20); c.globalAlpha = 0.85; c.beginPath(); c.arc(x, y, 1.4 + rr() * 1.6, 0, TAU); c.fill(); }
+  c.lineWidth = 1.6;
+  for (let i = 0; i < Math.round(26 * k); i++) { const [x, y] = rp(20), a = rr() * TAU, l = 5 + rr() * 9; c.globalAlpha = 0.8; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+  { const [x, y] = rp(130); c.lineWidth = 0.9; c.globalAlpha = 0.75; for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(x + i * 15, y - i * 4, 3.2, 0, TAU); c.stroke(); } }
+  c.restore();
+  c.globalAlpha = 1;
+  bloom(cv, c, 0.55);
+  layThreads = cv;
+  pulses = Array.from({length: narrow ? 14 : 34}, () => newPulse(true));
+}
+function newPulse(rand){ const h = hubs[(Math.random() * hubs.length) | 0]; return {q: h.curves[(Math.random() * h.curves.length) | 0], u: rand ? Math.random() : 0, v: 0.16 + Math.random() * 0.34}; }
+
+/* --- 环带底板：只放不转的部分（底色、两条弧、节点标签） --- */
+function buildRing(){
+  const [cv, c] = mkLayer(), {cx, cy, R1, R2, narrow} = G, half = Math.PI / 2;
+  c.beginPath(); c.arc(cx, cy, R2, 0, TAU); c.arc(cx, cy, R1, 0, TAU, true); c.fillStyle = T.band; c.fill();
+  c.strokeStyle = T.line;
+  if (T.dark) { c.globalAlpha = 0.18; c.lineWidth = 5; c.beginPath(); c.arc(cx, cy, R2, -half, half); c.stroke(); c.beginPath(); c.arc(cx, cy, R1, -half, half); c.stroke(); }
+  c.globalAlpha = T.dark ? 0.95 : 0.85; c.lineWidth = 1.1;
+  c.beginPath(); c.arc(cx, cy, R1, -half, half); c.stroke();
+  c.beginPath(); c.arc(cx, cy, R2, -half, half); c.stroke();
+  c.globalAlpha = 0.3; c.lineWidth = 0.7; c.beginPath(); c.arc(cx, cy, R2 - 7, -half, half); c.stroke();
+  c.globalAlpha = 1;
+  layRing = cv;
+}
+
+/* --- 环带数据块：整圈排布，随飞轮一起转，文字沿半径方向 --- */
+function buildBlocks(){
+  blocks = [];
+  blockFS = G.narrow ? 5.8 : 8.8; blockLH = blockFS * 1.34;
+  for (const col of (G.narrow ? [0] : [0, 1])) {
+    const rr = mulberry32(11 + col * 97);
+    const types = col ? ['table', 'grid', 'bars', 'table', 'tag'] : ['code', 'table', 'bars', 'code', 'tag', 'code'];
+    let th = rr() * 0.05;
+    while (th < TAU - 0.06) {
+      const type = pick(rr, types); let lines = [];
+      if (type === 'code') { lines = ['// ' + pick(rr, ['source / extract', 'audit / compare', 'dispatch / route', 'review / revise'])]; const n = 5 + ((rr() * 6) | 0); for (let i = 0; i < n; i++) lines.push(pick(rr, CODEBITS)); }
+      else if (type === 'table') { const n = 6 + ((rr() * 4) | 0); for (let i = 0; i < n; i++) lines.push(`${String((rr() * 99) | 0).padStart(3, '0')}  ${(rr() * 0.09).toFixed(4)}  ${rr() < 0.8 ? 'ok ' : 'chk'}  ${(100 + rr() * 900) | 0}ms`); }
+      else if (type === 'grid') { const n = 5 + ((rr() * 3) | 0); for (let i = 0; i < n; i++) { let s = ''; for (let j = 0; j < 8; j++) s += String((rr() * 99) | 0).padStart(2, '0') + ' '; lines.push(s.trim()); } }
+      else if (type === 'bars') { lines = Array(4 + ((rr() * 3) | 0)).fill(''); }
+      else { lines = [`${pick(rr, wfs).id} — ${pick(rr, ['mood', 'drift', 'scope', 'route', 'spec'])}`]; }
+      const h = lines.length * blockLH + 4, dth = h / G.R1;
+      if (th + dth > TAU - 0.03) break;
+      blocks.push({type, lines, h, th: th + dth / 2, col, ind: rr(), seed: (rr() * 100000) | 0});
+      th += dth + (10 + rr() * 18) / G.R1;
+    }
+  }
+}
+
+function drawBlocks(c, t){
+  const {cx, cy, R1, R2} = G, rot = t * SPIN, band = R2 - R1, thVis = visAng(R1, 50);
+  c.font = `500 ${blockFS}px ${FONT}`; c.textBaseline = 'top';
+  for (const b of blocks) {
+    const th = wrapPI(b.th + rot);
+    if (th > thVis || th < -thVis) continue;
+    const x0 = R1 + 14 + (b.col ? band * 0.5 : 0) + b.ind * band * 0.04;
+    const maxW = b.col || G.narrow ? Math.max(12, R2 - (G.narrow ? 34 : 54) - x0) : band * 0.45;
+    const y = -b.h / 2;
+    c.save(); c.translate(cx, cy); c.rotate(th);
+    if (b.type === 'bars') {
+      const rr = mulberry32(b.seed); c.fillStyle = T.text; c.globalAlpha = 0.9;
+      for (let i = 0; i < b.lines.length; i++) { let x = x0; const lim = x0 + Math.min(maxW, G.narrow ? 34 : 64); while (x < lim) { const w = 2 + rr() * 9; if (rr() < 0.62) c.fillRect(x, y + 2 + i * blockLH, Math.min(w, lim - x), blockLH * 0.55); x += w + 1.5; } }
+    } else {
+      const hi = b.type === 'code' ? 1 + (((t * 0.6) | 0) + b.seed) % (b.lines.length - 1) : -1;
+      for (let i = 0; i < b.lines.length; i++) {
+        const ly = y + 2 + i * blockLH;
+        if (i === hi) {
+          const tw = Math.min(maxW, c.measureText(b.lines[i]).width) + 4;
+          c.globalAlpha = 1; c.fillStyle = T.text; c.fillRect(x0 - 2, ly - 1, tw, blockLH); c.fillStyle = T.band;
+        } else {
+          c.fillStyle = T.text; c.globalAlpha = i === 0 && b.type !== 'table' && b.type !== 'grid' ? 1 : b.type === 'code' ? 0.8 : 0.62;
+        }
+        c.fillText(b.lines[i], x0, ly, maxW);
+      }
+    }
+    c.restore();
+  }
+  c.globalAlpha = 1;
+}
+
+/* --- 飞轮刻度与字节标签，跟着转 --- */
+const labelVal = k => (((k * 2654435761) >>> 0) % 360) + 20;
+function drawWheelMarks(c, t){
+  const {cx, cy, R1, R2, narrow} = G, rot = t * SPIN;
+  const p = new Path2D(), s1 = 6 / R1, t1 = visAng(R1, 12);
+  for (let k = Math.ceil((-t1 - rot) / s1), e = Math.floor((t1 - rot) / s1); k <= e; k++) {
+    const a = k * s1 + rot, l = k % 5 === 0 ? 9 : 4, ca = Math.cos(a), sa = Math.sin(a);
+    p.moveTo(cx + ca * (R1 + 2), cy + sa * (R1 + 2)); p.lineTo(cx + ca * (R1 + 2 + l), cy + sa * (R1 + 2 + l));
+  }
+  c.strokeStyle = T.line; c.globalAlpha = 0.7; c.lineWidth = 0.8; c.stroke(p);
+  const q = new Path2D(), s2 = 3.2 / R2, t2 = visAng(R2, 12);
+  for (let k = Math.ceil((-t2 - rot) / s2), e = Math.floor((t2 - rot) / s2); k <= e; k++) {
+    const a = k * s2 + rot, l = k % 10 === 0 ? 8 : 3, ca = Math.cos(a), sa = Math.sin(a);
+    q.moveTo(cx + ca * (R2 - 1), cy + sa * (R2 - 1)); q.lineTo(cx + ca * (R2 - 1 - l), cy + sa * (R2 - 1 - l));
+  }
+  c.globalAlpha = 0.55; c.lineWidth = 0.7; c.stroke(q);
+  const s3 = (narrow ? 34 : 46) / R2;
+  c.globalAlpha = 1; c.fillStyle = T.dim; c.font = `${narrow ? 6 : 8}px ${FONT}`; c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (let k = Math.ceil((-t2 - rot) / s3), e = Math.floor((t2 - rot) / s3); k <= e; k++) {
+    c.save(); c.translate(cx, cy); c.rotate(k * s3 + rot); c.fillText(`${labelVal(k)} b`, R2 - 13, 0); c.restore();
+  }
+  c.textAlign = 'left';
+}
+
+/* --- 飞轮谱线：基础细线 + 荧光扇区 + 滑动亮段 --- */
+const BA = [0.09, 0.17, 0.27, 0.4];
+function drawWheelStreaks(c, t, dt){
+  const {cx, cy, R2} = G, rot = t * SPIN, thVis = visAng(R2, 30);
+  const base = [new Path2D(), new Path2D(), new Path2D(), new Path2D()], hotP = new Path2D(), dashP = new Path2D(), hotD = new Path2D();
+  for (const s of streaks) {
+    const th = wrapPI(s.th + rot);
+    if (th > thVis || th < -thVis) continue;
+    const cp = Math.cos(th), sp = Math.sin(th), r0 = R2 + s.off, x0 = cx + cp * r0, y0 = cy + sp * r0;
+    const reach = Math.max(40, (W + 20 - x0) / Math.max(0.2, cp)), L = Math.min(reach, s.f * reach);
+    const p = s.hot ? hotP : base[s.b];
+    p.moveTo(x0, y0); p.lineTo(x0 + cp * L, y0 + sp * L);
+    const q = s.hot ? hotD : dashP;
+    for (const d of s.d) {
+      if (d.v) d.p = (d.p + d.v * dt * MOTION) % 1;
+      const a0 = d.p * L, a1 = Math.min(L, a0 + d.len);
+      q.moveTo(x0 + cp * a0, y0 + sp * a0); q.lineTo(x0 + cp * a1, y0 + sp * a1);
+    }
+  }
+  c.lineCap = 'butt'; c.strokeStyle = T.line; c.lineWidth = 0.7;
+  const A = T.dark ? 1.3 : 1;
+  base.forEach((p, i) => { c.globalAlpha = Math.min(0.9, BA[i] * A); c.stroke(p); });
+  if (T.dark) {
+    c.globalCompositeOperation = 'lighter';
+    c.strokeStyle = T.hot; c.globalAlpha = 0.1; c.lineWidth = 4.5; c.stroke(hotP);
+    c.globalAlpha = 0.6; c.lineWidth = 0.9; c.stroke(hotP);
+    c.globalAlpha = 0.12; c.strokeStyle = T.hi; c.lineWidth = 5; c.stroke(dashP);
+    c.globalAlpha = 0.9; c.lineWidth = 1.6; c.stroke(dashP);
+    c.strokeStyle = T.hot; c.globalAlpha = 0.3; c.lineWidth = 7; c.stroke(hotD);
+    c.strokeStyle = T.hi; c.globalAlpha = 1; c.lineWidth = 2; c.stroke(hotD);
+    c.globalCompositeOperation = 'source-over';
+  } else {
+    c.strokeStyle = T.hot; c.globalAlpha = 0.5; c.lineWidth = 0.8; c.stroke(hotP);
+    c.strokeStyle = T.line; c.globalAlpha = 0.8; c.lineWidth = 1.5; c.stroke(dashP);
+    c.strokeStyle = T.hot; c.globalAlpha = 0.95; c.lineWidth = 2; c.stroke(hotD);
+  }
+  c.globalAlpha = 1;
+}
+
+function drawPulses(c, dt){
+  const p = new Path2D();
+  for (let i = 0; i < pulses.length; i++) {
+    const m = pulses[i]; m.u += m.v * dt * MOTION;
+    if (m.u > 1) { pulses[i] = newPulse(false); continue; }
+    const u0 = Math.max(0, m.u - 0.07);
+    for (let k = 0; k <= 6; k++) { const [x, y] = bez(m.q, u0 + (m.u - u0) * k / 6); k ? p.lineTo(x, y) : p.moveTo(x, y); }
+  }
+  c.lineCap = 'round';
+  if (T.dark) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = T.hi; c.globalAlpha = 0.12; c.lineWidth = 4.5; c.stroke(p); c.globalAlpha = 0.9; c.lineWidth = 1.4; c.stroke(p); c.globalCompositeOperation = 'source-over'; }
+  else { c.strokeStyle = T.line; c.globalAlpha = 0.8; c.lineWidth = 1.35; c.stroke(p); }
+  c.globalAlpha = 1;
+}
+function drawHubMarks(c, t){
+  hubs.forEach((h, i) => {
+    const on = i === hoverHub, r = on ? 15 : 9 + 2 * Math.sin(t * 2 + i);
+    c.strokeStyle = T.dark ? T.hi : T.line; c.globalAlpha = on ? 1 : 0.55; c.lineWidth = on ? 1.2 : 0.8;
+    c.beginPath(); c.arc(h.x - 6, h.y, r, 0, TAU); c.stroke();
+    if (on) { c.beginPath(); c.moveTo(h.x - 30, h.y); c.lineTo(h.x - 22, h.y); c.moveTo(h.x - 6, h.y - 24); c.lineTo(h.x - 6, h.y - 16); c.moveTo(h.x - 6, h.y + 16); c.lineTo(h.x - 6, h.y + 24); c.stroke(); }
+  });
+  c.globalAlpha = 1;
+}
+
+/* --- 扫光：一道光束绕圆心快速扫过飞轮 --- */
+function drawBeam(c, t){
+  const {cx, cy, R1} = G, a = wrapPI(t * 0.85), w = 0.24, tv = visAng(R1, 40);
+  if (a < -tv || a - w > tv) return;
+  const far = W * 2, col = T.dark ? T.hot : T.line;
+  c.save();
+  c.beginPath(); c.moveTo(cx + Math.cos(a - w) * R1, cy + Math.sin(a - w) * R1);
+  c.arc(cx, cy, far, a - w, a); c.arc(cx, cy, R1, a, a - w, true); c.closePath();
+  if (c.createConicGradient) {
+    const g = c.createConicGradient(a - w, cx, cy), f = w / TAU;
+    g.addColorStop(0, rgba(col, 0)); g.addColorStop(f * 0.97, rgba(col, T.dark ? 0.2 : 0.07)); g.addColorStop(f, rgba(col, 0)); g.addColorStop(1, rgba(col, 0));
+    c.fillStyle = g;
+  } else { c.fillStyle = rgba(col, T.dark ? 0.08 : 0.03); }
+  if (T.dark) c.globalCompositeOperation = 'lighter';
+  c.fill();
+  c.beginPath(); c.moveTo(cx + Math.cos(a) * R1, cy + Math.sin(a) * R1); c.lineTo(cx + Math.cos(a) * far, cy + Math.sin(a) * far);
+  c.strokeStyle = col; c.globalAlpha = T.dark ? 0.55 : 0.35; c.lineWidth = 1; c.stroke();
+  c.restore();
+}
+
+/* --- 齿环：外圈反向快转、内圈反向慢转 --- */
+function drawGears(c, t){
+  const {cx, cy, R1, R2} = G;
+  const ro = -t * SPIN * 2.6, r0 = R2 + 5, r1 = R2 + 12, n = Math.round(TAU * R2 / 9), st = TAU / n, tv = visAng(R2, 30);
+  const p = new Path2D();
+  for (let k = Math.ceil((-tv - ro) / st), e = Math.floor((tv - ro) / st); k <= e; k++) {
+    const m = ((k % 7) + 7) % 7; if (m === 3 || m === 6) continue;
+    const a = k * st + ro, a2 = a + st * (m === 0 ? 0.85 : 0.45);
+    p.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); p.arc(cx, cy, r0, a, a2); p.arc(cx, cy, r1, a2, a, true); p.closePath();
+  }
+  const ri = R1 - 9, si = TAU / Math.round(TAU * R1 / 7), ti = visAng(R1, 30), roi = -t * SPIN * 1.6;
+  const q = new Path2D();
+  for (let k = Math.ceil((-ti - roi) / si), e = Math.floor((ti - roi) / si); k <= e; k++) {
+    if (((k % 9) + 9) % 9 > 5) continue;
+    const a = k * si + roi; q.moveTo(cx + Math.cos(a) * ri, cy + Math.sin(a) * ri); q.arc(cx, cy, ri, a, a + si * 0.55);
+  }
+  if (T.dark) {
+    c.globalCompositeOperation = 'lighter';
+    c.fillStyle = T.hot; c.globalAlpha = 0.85; c.fill(p);
+    c.strokeStyle = T.hot; c.globalAlpha = 0.18; c.lineWidth = 6; c.stroke(p);
+    c.globalCompositeOperation = 'source-over';
+    c.strokeStyle = T.line; c.globalAlpha = 0.8; c.lineWidth = 2; c.stroke(q);
+  } else {
+    c.fillStyle = T.line; c.globalAlpha = 0.8; c.fill(p);
+    c.strokeStyle = T.line; c.globalAlpha = 0.6; c.lineWidth = 2; c.stroke(q);
+  }
+  c.globalAlpha = 1;
+}
+
+/* --- 三个汇聚节点的标签：定时切换工作流，切换时乱码跳动 --- */
+const GLYPH = '01#%&*+=/<>▚▞▙▟░▒';
+function switchHub(){
+  const i = hubTurn++ % hubWf.length;
+  const busy = [...new Set(tasks.filter(t => t.state === 'run').map(t => t.wf))].filter(w => !hubWf.includes(w));
+  const pool = busy.length ? busy : wfs.map(w => w.i).filter(w => !hubWf.includes(w));
+  hubWf[i] = pool[(Math.random() * pool.length) | 0];
+  hubCh[i] = simT; needs = true;
+  const h = hubs[i];
+  if (h) for (let k = 0; k < 10; k++) pulses[(Math.random() * pulses.length) | 0] = {q: h.curves[(Math.random() * h.curves.length) | 0], u: Math.random() * 0.3, v: 0.5 + Math.random() * 0.45};
+  if (hoverHub === i) showTip();
+}
+function drawHubLabels(c, t){
+  const fs = G.narrow ? 6.5 : 9;
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  hubs.forEach((h, i) => {
+    const w = wfs[hubWf[i]], full = `${w.id} — ${w.name}`, e = t - hubCh[i];
+    let s = full;
+    if (e >= 0 && e < 0.6) {
+      const n = Math.floor(e / 0.6 * full.length);
+      s = full.slice(0, n) + Array.from(full.slice(n), ch => ch === ' ' ? ' ' : GLYPH[(Math.random() * GLYPH.length) | 0]).join('');
+    }
+    const fresh = e >= 0 && e < 1.1, jump = e >= 0 && e < 0.4 ? -6 * Math.sin(e / 0.4 * Math.PI) : 0;
+    const x = h.x - 30, y = h.y - 16 + jump;
+    c.font = `700 ${fs}px ${FONT}`;
+    const tw = c.measureText(s).width;
+    c.globalAlpha = 1; c.fillStyle = fresh ? T.text : T.bg; c.fillRect(x - tw - 6, y - fs * 0.8, tw + 12, fs * 1.6);
+    if (!fresh) { c.strokeStyle = T.text; c.globalAlpha = 0.5; c.lineWidth = 0.8; c.strokeRect(x - tw - 6 + 0.5, y - fs * 0.8 + 0.5, tw + 11, fs * 1.6 - 1); c.globalAlpha = 1; }
+    c.fillStyle = fresh ? T.band : T.text; c.fillText(s, x, y);
+    const sub = `${h.curves.length} src · q ${w.q.toFixed(2)} · ${w.q >= 0.8 ? 'match' : 'review'}`;
+    c.font = `500 ${fs - 1.5}px ${FONT}`;
+    const sw = c.measureText(sub).width;
+    c.fillStyle = T.bg; c.fillRect(x - sw - 4, y + fs * 0.85, sw + 8, fs * 1.25);
+    c.fillStyle = T.dim; c.fillText(sub, x, y + fs * 1.45);
+    if (e >= 0 && e < 0.7) {
+      const k = e / 0.7;
+      c.strokeStyle = T.dark ? T.hot : T.line; c.globalAlpha = 1 - k; c.lineWidth = 1.4;
+      c.beginPath(); c.arc(h.x - 6, h.y, 10 + k * 70, 0, TAU); c.stroke(); c.globalAlpha = 1;
+    }
+  });
+  c.textAlign = 'left';
+}
+
+let nextGlitch = 6, glitchUntil = 0;
+function drawStage(t, dt){
+  const c = sctx;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  c.fillStyle = T.bg; c.fillRect(0, 0, sc.width, sc.height);
+  c.drawImage(layThreads, 0, 0); c.drawImage(layRing, 0, 0);
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawWheelStreaks(c, t, dt); drawBeam(c, t); drawGears(c, t); drawWheelMarks(c, t); drawPulses(c, dt); drawBlocks(c, t); drawHubMarks(c, t); drawHubLabels(c, t);
+  if (T.dark && !reduce && dt > 0) {
+    if (t > nextGlitch) { glitchUntil = t + 0.1; nextGlitch = t + 5 + Math.random() * 5; }
+    if (t < glitchUntil) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      for (let k = 0; k < 3; k++) { const y = Math.random() * sc.height, h = (4 + Math.random() * 24) * DPR, dx = (Math.random() - 0.5) * 36 * DPR; c.drawImage(sc, 0, y, sc.width, h, dx, y, sc.width, h); }
+    }
+  }
+}
+
+function showTip(){
+  const h = hubs[hoverHub]; if (!h) return;
+  const wi = hubWf[hoverHub], w = wfs[wi], live = tasks.filter(t => t.wf === wi && t.state === 'run').length;
+  tip.innerHTML = `<b>${w.id}</b>${w.name}<span>汇入 ${h.curves.length} 条来源 · 运行中 ${live} · 质检 ${w.q.toFixed(2)} ${w.q >= 0.8 ? 'match' : 'review'}</span>`;
+  tip.hidden = false;
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = Math.max(8, Math.min(W - tw - 8, h.x + 14)) + 'px';
+  tip.style.top = Math.max(8, Math.min(H - th - 8, h.y + 16)) + 'px';
+}
+function onPointer(e){
+  if (!G) return;
+  const r = sc.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  let h = -1; hubs.forEach((hb, i) => { if (Math.hypot(x - (hb.x - 6), y - hb.y) < 34) h = i; });
+  if (h !== hoverHub) { hoverHub = h; needs = true; }
+  if (h >= 0) showTip(); else tip.hidden = true;
+}
+sc.addEventListener('pointermove', onPointer);
+sc.addEventListener('pointerdown', onPointer);
+sc.addEventListener('pointerleave', () => { hoverHub = -1; tip.hidden = true; needs = true; });
+
+/* ================= 6. 粒子求解器 ================= */
+const pc = $('#pc'), pctx = pc.getContext('2d');
+let PW = 1, PH = 1, mode = 'advect', stepN = 561, maxU = 0;
+const parts = [], vort = [];
+function seedP(){ parts.length = 0; const n = Math.round(Math.min(520, PW * PH / 70)); for (let i = 0; i < n; i++) parts.push({x: Math.random() * PW, y: Math.random() * PH, hl: Math.random() < 0.1, age: Math.random() * 200, life: 60 + Math.random() * 180}); }
+function stepP(dt, tt){
+  const c = pctx, s = 60 * dt;
+  c.globalAlpha = 1; c.fillStyle = T.panel; c.fillRect(0, 0, PW, PH);
+  const pa = new Path2D(), pb = new Path2D(); let mu = 0;
+  for (const p of parts) {
+    const a = Math.sin(p.x * 0.03 + tt * 0.35) * 1.7 + Math.cos(p.y * 0.045 - tt * 0.27) * 1.7 + Math.sin((p.x - p.y) * 0.015 + tt * 0.12);
+    let vx = Math.cos(a) * 0.5, vy = Math.sin(a) * 0.5;
+    for (const v of vort) { const dx = p.x - v.x, dy = p.y - v.y, d2 = dx * dx + dy * dy + 25, d = Math.sqrt(d2), f = v.life * 2.4 * Math.exp(-d2 / 1400); vx += -dy / d * f; vy += dx / d * f; }
+    if (mode === 'project') { vx = Math.abs(vx) + 0.2; vy = (Math.round(p.y / 9) * 9 - p.y) * 0.12; }
+    const u = Math.hypot(vx, vy); if (u > mu) mu = u;
+    p.x += vx * s; p.y += vy * s; p.age += s;
+    if (p.age > p.life) { p.x = Math.random() * PW; p.y = Math.random() * PH; p.age = 0; }
+    if (p.x < -6) p.x += PW + 12; else if (p.x > PW + 6) p.x -= PW + 12;
+    if (p.y < -6) p.y += PH + 12; else if (p.y > PH + 6) p.y -= PH + 12;
+    const l = 2.5 + Math.min(6, u * 5), ux = vx / (u || 1), uy = vy / (u || 1), path = p.hl ? pb : pa;
+    path.moveTo(p.x - ux * l / 2, p.y - uy * l / 2); path.lineTo(p.x + ux * l / 2, p.y + uy * l / 2);
+  }
+  if (dt > 0 || !maxU) maxU = mu;
+  c.lineCap = 'butt'; c.strokeStyle = T.cell; c.globalAlpha = 0.85; c.lineWidth = 1.3; c.stroke(pa);
+  c.strokeStyle = T.ink; c.globalAlpha = 1; c.lineWidth = 2; c.stroke(pb);
+  for (const v of vort) { v.life -= dt / 6; if (v.life > 0) { c.strokeStyle = T.ink; c.globalAlpha = 0.6 * v.life; c.lineWidth = 0.8; c.beginPath(); c.arc(v.x, v.y, 6 + (1 - v.life) * 20, 0, TAU); c.stroke(); } }
+  for (let i = vort.length - 1; i >= 0; i--) if (vort[i].life <= 0) vort.splice(i, 1);
+  c.globalAlpha = 1;
+  if (dt > 0) stepN++;
+}
+function addVortex(x, y){ vort.push({x, y, life: 1}); if (vort.length > 4) vort.shift(); }
+pc.addEventListener('pointerdown', e => { const r = pc.getBoundingClientRect(); addVortex(e.clientX - r.left, e.clientY - r.top); panelsNeed = true; });
+pc.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addVortex(PW * (0.2 + Math.random() * 0.6), PH * (0.2 + Math.random() * 0.6)); } });
+SR.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.m === 'rerun') { seedP(); stepN = 0; vort.length = 0; panelsNeed = true; b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 350); return; }
+  mode = b.dataset.m; panelsNeed = true;
+  SR.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x.dataset.m === mode));
+}));
+
+/* ================= 7. 主循环与控制 ================= */
+let simT = 0, last = performance.now(), paused = false;
+function setPaused(p){ paused = p; pauseBtn.textContent = p ? '继续' : '暂停'; pauseBtn.setAttribute('aria-pressed', String(p)); needs = true; }
+pauseBtn.addEventListener('click', () => setPaused(!paused));
+
+/* 光线速度：滑块选档 + 预设菜单，选择记在 localStorage */
+const spdEl = $('#spd'), spdV = $('#spdV'), spdQ = $('#spdQ'), spdQb = $('#spdq');
+let spdIdx = 2;
+try { const saved = +localStorage.getItem('agent-motion'); if (saved >= 0 && saved < MOTION_STEPS.length) spdIdx = saved; } catch (e) {}
+function applySpeed(i, remember){
+  spdIdx = Math.max(0, Math.min(MOTION_STEPS.length - 1, i));
+  MOTION = MOTION_STEPS[spdIdx];
+  spdEl.value = String(spdIdx);
+  spdV.textContent = MOTION.toFixed(1).replace(/\.0$/, '') + '×';
+  spdEl.setAttribute('aria-valuetext', spdV.textContent);
+  spdQ.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.i === spdIdx));
+  if (remember) { try { localStorage.setItem('agent-motion', String(spdIdx)); } catch (e) {} }
+}
+MOTION_STEPS.forEach((v, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.i = i;
+  b.innerHTML = '<span>' + v.toFixed(1).replace(/\.0$/, '') + '×</span>';
+  b.addEventListener('click', () => { applySpeed(i, true); spdQ.hidden = true; });
+  spdQ.appendChild(b);
+});
+applySpeed(spdIdx, false);
+spdEl.addEventListener('input', () => applySpeed(+spdEl.value, true));
+spdQb.addEventListener('click', e => { e.stopPropagation(); spdQ.hidden = !spdQ.hidden; });
+SR.addEventListener('click', e => { if (!spdQ.hidden && !spdQ.contains(e.target) && e.target !== spdQb) spdQ.hidden = true; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !spdQ.hidden) spdQ.hidden = true; });
+themeBtn.addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; });
+document.addEventListener('keydown', e => { if (host.hidden) return; if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPaused(!paused); } });
+function onTheme(){ readTheme(); stageDirty = true; panelsNeed = true; }
+new MutationObserver(onTheme).observe(root, {attributes: true, attributeFilter: ['data-theme']});
+darkMQ.addEventListener('change', onTheme);
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if (host.hidden) { last = now; return; }
+  const real = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = paused ? 0 : real; simT += dt;
+  try {
+    if (stageDirty) { layoutStage(); stageDirty = false; needs = true; }
+    if (dt > 0 || needs) { drawStage(simT, dt); needs = false; }
+    if (dt > 0 || panelsNeed) {
+      if (PW > 20) stepP(dt, simT);
+      panelsNeed = false;
+    }
+  } catch (err) { console.error(err); }
+}
+
+function hudTick(){
+  const cfl = maxU / 1.6, bad = cfl > 1;
+  $('#cfl').textContent = cfl.toFixed(2);
+  const st = $('#cflst'); st.textContent = bad ? 'OVER · 步长减半' : 'OK'; st.className = bad ? 'warn' : '';
+  $('#stepN').textContent = 'step ' + stepN;
+}
+function clockTick(){ $('#clock').textContent = hms(new Date()); }
+let hiIdx = 1; const cells = [...SR.querySelectorAll('.stat')];
+function cycleHi(){ cells.forEach((el, i) => el.classList.toggle('on', i === hiIdx)); hiIdx = (hiIdx + 1) % cells.length; }
+
+const ro = new ResizeObserver(entries => {
+  for (const e of entries) {
+    if (e.target === stage) stageDirty = true;
+    else if (e.target.id === 'pcBox') { [PW, PH] = fitCv(pc, pctx); seedP(); for (let k = 0; k < 4; k++) stepP(1 / 60, simT); }
+  }
+  renderFeed(); needs = true; panelsNeed = true;
+});
+[stage, $('#pcBox')].forEach(el => ro.observe(el));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { stageDirty = true; panelsNeed = true; });
+
+readTheme();
+renderAll(); nextCodeSet();
+if (reduce) { cl = cset.lines.length - 1; cc = cset.lines[cl].length; }
+renderCode(); clockTick(); cycleHi();
+setPaused(false);   /* 无障碍：reduce 不再默认暂停——静止的大屏等于坏掉，动效降级交给下方 dark 呼吸判定 */
+setInterval(() => { if (!paused && !host.hidden) step(); }, 900);
+setInterval(() => { if (!paused && !host.hidden) hudTick(); }, 300);
+setInterval(clockTick, 1000);
+setInterval(() => { if (!paused && !host.hidden) cycleHi(); }, 4500);
+setInterval(() => { if (!paused && !host.hidden) switchHub(); }, 2400);
+setInterval(() => { if (!paused && !host.hidden) typeTick(); }, 34);
+setInterval(() => { if (!paused && PW > 1) addVortex(PW * (0.2 + Math.random() * 0.6), PH * (0.2 + Math.random() * 0.6)); }, 9000);
+setTimeout(hudTick, 500);
+requestAnimationFrame(frame);
+}
+
+/* ================= 外壳：挂载唯一主题（OPS 纸面工程） ================= */
+(() => {
+  'use strict';
+  const host = document.getElementById('host-ops');
+  const tpl = document.getElementById('tpl-ops');
+  if (!host || !tpl) return;
+  host.hidden = false;
+  const SR = host.attachShadow({mode: 'open'});
+  SR.appendChild(tpl.content.cloneNode(true));
+  try { mountOps(host, SR); } catch (e) { console.error(e); }
+})();
+</script>
+
+<script>
+(function(){
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape") return;
+    try { parent.postMessage({ hlEmbed: "esc" }, "*"); } catch (err) {}
+  }, true);
+})();
+</script>
+</body>
+</html>
